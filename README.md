@@ -14,7 +14,12 @@ By allowing existing disassembly engines to determine executable and procedure e
 Symbolic engines will allow for input bounding on arguments to the specified address, and may in some cases also give typing information. Input bounding (or value bounding within procedure flow) can then be used when generating input within a fuzzer.
 
 ### Open source projects used:
-To be filled in as we leverage technologies and techniques
+
+- https://github.com/penhoi/ghidra-decompiler/wiki/Symbolic-Value-Set-Analysis
 
 ## References of interest:
-To be filled in as we find interesting papers
+
+- http://conferences.sigcomm.org/sigcomm/2010/papers/apsys/p13.pdf
+- https://pdfs.semanticscholar.org/1600/f73baa952cdf433f0ed6333815d3668f8f24.pdf
+- https://research.cs.wisc.edu/wpis/papers/cc04.pdf
+
