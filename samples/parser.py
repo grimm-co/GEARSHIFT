@@ -3,16 +3,21 @@ import hashlib
 x8664_args = ["VRDI", "VRSI", "VRDX", "VRCX"]
 
 struct_hashes = {}
+arguments = {}
+printed = set()
 
 n = 0
 
 # gets the struct modifier based on member type and size
 def get_modifier(member):
 	if type(member[0]) is int:
-		if member[1] == 4:
-			return "int"
-		elif member[1] == 8:
-			return "long"
+		if member[0] & 0xff== 0x0: # int
+			if member[1] == 4:
+				return "uint32_t"
+			elif member[1] == 8:
+				return "uint64_t"
+		elif member[0] & 0xff == 0x1: # buf
+			return "char*"
 	elif type(member[0]) is Struct:
 		return str(member[0]) + "*"
 
@@ -62,12 +67,11 @@ class Struct:
 		return ret
 
 	def pp(self):
-		print(self.members)
-		print("struct " + str(self) + " {")
+		print("typedef struct {")
 		for i in range(len(self.members)):
-			cur = struct.members[i]
+			cur = self.members[i]
 			print("\t" + get_modifier(cur) + " entry_" + str(i) + ";")
-		print("}")
+		print("} " + str(self) + ";")
 	
 	def get_hash(self):
 		h = 0
@@ -117,22 +121,33 @@ def parse_key(key):
 	return name, offset, child
 
 # finds the struct a descriptor key is referring to by propagation from the lowest level up and dereferencing the struct at some offset at each level until it reaches the top
-def find_struct(key, arguments):
+def find_struct(key):
 	name, offset, child = parse_key(key)
 	if len(child) == 0:
 		return arguments[name], offset
 	else:
-		child_struct, child_struct_offset = find_struct(child, arguments)
+		child_struct, child_struct_offset = find_struct(child)
 		return child_struct.get_struct_at_off(child_struct_offset), offset
 
+# sets the value referred to by key
+def set_value(key, val, top_level=False):
+	name, offset, child = parse_key(key)
+	if len(child) == 0:
+		return arguments[name], offset
+	else:
+		child_struct, child_struct_offset = set_value(child, val)
+		if not top_level:
+			return child_struct.get_struct_at_off(child_struct_offset), offset
+		else:
+			child_struct.insert_member(0x8, child_struct_offset, val)
+
 # builds a struct for the current descriptor key
-def build_struct(tup, arguments):
+def build_struct(tup):
 	key = tup[1]
 	offsets = tup[2]
 
 	name, offset, child = parse_key(key)
 
-	# TODO: find duplicate struct signature
 	global n
 	struct = Struct(name, offsets, n)
 	if struct.get_hash() in struct_hashes:
@@ -142,7 +157,7 @@ def build_struct(tup, arguments):
 	struct_hashes[struct.get_hash()] = struct
 
 	if len(child) > 0:
-		child_struct, offset = find_struct(child, arguments)
+		child_struct, offset = find_struct(child)
 		print(child, offset)
 		child_struct.insert_member(get_member_length(name), offset, struct)
 	return struct
@@ -150,7 +165,6 @@ def build_struct(tup, arguments):
 # structs is a list of tuples of the form (key, Offsets)
 # this returns a list of structs
 def converter(structs, num_args):
-	arguments = {}
 	depth_sorted = []
 	result = []
 	# assign recursive struct depth to each key
@@ -162,13 +176,51 @@ def converter(structs, num_args):
 	depth_sorted.sort()
 	for i in range(len(depth_sorted)):
 		# parse and create structs
-		struct = build_struct(depth_sorted[i], arguments)
+		struct = build_struct(depth_sorted[i])
 		result.append(struct)
 	return result
 
+def do_read(struct, current_reference):
+	ret = ""
+	curoff = 0
+	total_length = 0
+	for i in range(len(struct.members)):
+		total_length += struct.members[i][1]
+	ret += "{} = ({}*)malloc({});\n".format(current_reference, str(struct), total_length)
+	for i in range(len(struct.members)):
+		value, length = struct.members[i]
+		if type(value) is int and value & 0xff == 0x0:
+			ret += "fread((char*)&{}->entry_{}, {}, 1, h);\n".format(current_reference, i, length)
+		elif type(value) is int and value & 0xff == 0x1:
+			# TODO: better array length
+			ret += "{}->entry_{} = (char*)malloc({});\n".format(current_reference, i, value >> 8);
+			ret += "fread({}->entry_{}, {}, 1, h);\n" .format(current_reference, i, value >> 8)
+		else:
+			ret += do_read(value, current_reference + "->entry_{}".format(i))
+		curoff += length
+	if struct.get_hash() not in printed:
+		struct.pp()
+		printed.add(struct.get_hash())
+	return ret
+
+def generate_struct_reader(nargs):
+	args = ["VRDI", "VRSI", "VRDX"]
+	code = ""
+	for i in range(nargs):
+		cur = arguments[args[i]]
+		code += str(cur) + "* " + args[i] + ";\n"
+		res = do_read(cur, args[i])
+		code += res
+	return code
+
+# key, list of offsets
 structs = [("V(V(VRDI+8)+24)", [0, 4, 8, 12]), ("V(V(VRDI+8)+16)", [0, 4, 8, 12]), ("V(VRDI+8)", [0, 8, 16, 24]), ("VRDI", [0, 4, 8])]
+# key, size of array (might be inaccurate)
+arrs = [("V(V(VRDI+8))", 6)]
 num_args = 1
 res = converter(structs, num_args)
-for struct in res:
-	struct.pp()
-
+# set arrays
+for i in arrs:
+	set_value(i[0], 0x1 | (i[1] << 8), True)
+code = generate_struct_reader(num_args)
+print(code)
