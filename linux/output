@@ -1,0 +1,122 @@
+_init
+Address: 1520
+Program: x86/little/64/default
+Base Addr: 1048576
+puts
+Address: 1568
+Program: x86/little/64/default
+Base Addr: 1048576
+__stack_chk_fail
+Address: 1584
+Program: x86/little/64/default
+Base Addr: 1048576
+printf
+Address: 1600
+Program: x86/little/64/default
+Base Addr: 1048576
+read
+Address: 1616
+Program: x86/little/64/default
+Base Addr: 1048576
+malloc
+Address: 1632
+Program: x86/little/64/default
+Base Addr: 1048576
+__cxa_finalize
+Address: 1648
+Program: x86/little/64/default
+Base Addr: 1048576
+_start
+Address: 1664
+Program: x86/little/64/default
+Base Addr: 1048576
+Params: 1
+deregister_tm_clones
+Address: 1712
+Program: x86/little/64/default
+Base Addr: 1048576
+register_tm_clones
+Address: 1776
+Program: x86/little/64/default
+Base Addr: 1048576
+__do_global_dtors_aux
+Address: 1856
+Program: x86/little/64/default
+Base Addr: 1048576
+frame_dummy
+Address: 1920
+Program: x86/little/64/default
+Base Addr: 1048576
+main
+Address: 1930
+Program: x86/little/64/default
+Base Addr: 1048576
+atoi32
+Address: 2190
+Program: x86/little/64/default
+Base Addr: 1048576
+Array: Base: V(V(VRDI+8)), stride: 1: size in bytes: 6
+Struct: V(V(VRDI+8)+24) | [0, 4, 8, 12]
+Struct: V(V(VRDI+8)+16) | [0, 4, 8, 12]
+Struct: V(VRDI+8) | [0, 8, 16, 24]
+Struct: VRDI | [0, 4, 8]
+Params: 1
+atoi_2
+Address: 2490
+Program: x86/little/64/default
+Base Addr: 1048576
+Array: Base: VRDI, stride: 1: size in bytes: 6
+Params: 2
+__libc_csu_init
+Address: 2624
+Program: x86/little/64/default
+Base Addr: 1048576
+Params: 3
+__libc_csu_fini
+Address: 2736
+Program: x86/little/64/default
+Base Addr: 1048576
+_fini
+Address: 2740
+Program: x86/little/64/default
+Base Addr: 1048576
+_ITM_deregisterTMCloneTable
+Address: 2105344
+Program: x86/little/64/default
+Base Addr: 1048576
+puts
+Address: 2105352
+Program: x86/little/64/default
+Base Addr: 1048576
+__stack_chk_fail
+Address: 2105360
+Program: x86/little/64/default
+Base Addr: 1048576
+printf
+Address: 2105368
+Program: x86/little/64/default
+Base Addr: 1048576
+read
+Address: 2105376
+Program: x86/little/64/default
+Base Addr: 1048576
+__libc_start_main
+Address: 2105384
+Program: x86/little/64/default
+Base Addr: 1048576
+__gmon_start__
+Address: 2105392
+Program: x86/little/64/default
+Base Addr: 1048576
+malloc
+Address: 2105400
+Program: x86/little/64/default
+Base Addr: 1048576
+_ITM_registerTMCloneTable
+Address: 2105408
+Program: x86/little/64/default
+Base Addr: 1048576
+__cxa_finalize
+Address: 2105416
+Program: x86/little/64/default
+Base Addr: 1048576
