@@ -1,10 +1,14 @@
 import hashlib
+from config import *
 
-x8664_args = ["VRDI", "VRSI", "VRDX", "VRCX"]
+#x8664_args = ["VRDI", "VRSI", "VRDX", "VRCX"]
 
 struct_hashes = {}
 arguments = {}
 printed = set()
+c = open(output_source, "w")
+struct_string = ""
+args_list = []
 
 n = 0
 
@@ -67,11 +71,13 @@ class Struct:
 		return ret
 
 	def pp(self):
-		print("typedef struct {")
+		res = ""
+		res += "typedef struct {\n"
 		for i in range(len(self.members)):
 			cur = self.members[i]
-			print("\t" + get_modifier(cur) + " entry_" + str(i) + ";")
-		print("} " + str(self) + ";")
+			res += "\t" + get_modifier(cur) + " entry_" + str(i) + ";\n"
+		res += "} " + str(self) + ";\n"
+		return res
 	
 	def get_hash(self):
 		h = 0
@@ -133,6 +139,9 @@ def find_struct(key):
 def set_value(key, val, top_level=False):
 	name, offset, child = parse_key(key)
 	if len(child) == 0:
+		if name not in arguments:
+			# this is an array
+			arguments[name] = val
 		return arguments[name], offset
 	else:
 		child_struct, child_struct_offset = set_value(child, val)
@@ -182,6 +191,7 @@ def converter(structs, num_args):
 
 def do_read(struct, current_reference):
 	ret = ""
+	clean = ""
 	curoff = 0
 	total_length = 0
 	for i in range(len(struct.members)):
@@ -190,37 +200,92 @@ def do_read(struct, current_reference):
 	for i in range(len(struct.members)):
 		value, length = struct.members[i]
 		if type(value) is int and value & 0xff == 0x0:
-			ret += "fread((char*)&{}->entry_{}, {}, 1, h);\n".format(current_reference, i, length)
+			ret += "fread((char*)&{}->entry_{}, 1, {}, h);\n".format(current_reference, i, length)
 		elif type(value) is int and value & 0xff == 0x1:
 			# TODO: better array length
-			ret += "{}->entry_{} = (char*)malloc({});\n".format(current_reference, i, value >> 8);
-			ret += "fread({}->entry_{}, {}, 1, h);\n" .format(current_reference, i, value >> 8)
+			ret += "{}->entry_{} = (char*)malloc({});\n".format(current_reference, i, (value >> 8) + 1);
+			ret += "{}->entry_{}[{}] = 0;\n".format(current_reference, i, (value >> 8));
+			ret += "fread({}->entry_{}, 1, {}, h);\n" .format(current_reference, i, value >> 8)
+			clean += "\tfree({}->entry_{});".format(current_reference, i)
 		else:
-			ret += do_read(value, current_reference + "->entry_{}".format(i))
+			r, c = do_read(value, current_reference + "->entry_{}".format(i))
+			ret += r
+			clean += c
 		curoff += length
 	if struct.get_hash() not in printed:
-		struct.pp()
+		global struct_string
+		struct_string += struct.pp()
 		printed.add(struct.get_hash())
-	return ret
+	return ret, clean
 
 def generate_struct_reader(nargs):
-	args = ["VRDI", "VRSI", "VRDX"]
 	code = ""
+	cleanup = ""
 	for i in range(nargs):
-		cur = arguments[args[i]]
-		code += str(cur) + "* " + args[i] + ";\n"
-		res = do_read(cur, args[i])
-		code += res
-	return code
+		args_list.append(x8664_args[i])
+		if x8664_args[i] not in arguments:
+			# this is an int
+			code += "uint64_t {};\n".format(x8664_args[i]);
+			code += "fread(&{}, 1, 8, h);\n".format(x8664_args[i])
+		else:
+			cur = arguments[x8664_args[i]]
+			if type(cur) is Struct:
+				# struct
+				code += str(cur) + "* " + x8664_args[i] + ";\n"
+				res, clean = do_read(cur, x8664_args[i])
+				code += res
+				cleanup += clean
+			else:
+				# array
+				code += "char* {} = (char*)malloc({});\n".format(x8664_args[i], (cur >> 8) + 1)
+				code += "{}[{}] = 0;\n".format(x8664_args[i], cur >> 8)
+				code += "fread({}, 1, {}, h);\n".format(x8664_args[i], cur >> 8)
+				cleanup += "\tfree({});\n".format(x8664_args[i])
+	return code, cleanup
+
+out = open("output", "r").read().strip().split("\n")
+structs = []
+arrs = []
+log = False
+num_args = 0
+arch = ""
+base = 0x0
+for i in out:
+	if log:
+		if "Array: " in i:
+			first = i.split("Base: ")[1].split(", ")[0]
+			second = int(i.split("bytes: ")[1])
+			arrs.append((first, second))
+		elif "Struct: " in i:
+			first = i.split("Struct: ")[1].split(" | ")[0]
+			second = eval(i.split(" | ")[1])
+			structs.append((first, second))
+		elif "Params: " in i:
+			num_args = int(i.split("Params: ")[1].strip())
+		elif "Program: " in i:
+			arch = i.split("Program: ")[1]
+		elif "Base Addr: " in i:
+			base = int(i.split(": ")[1])
+		else:
+			log = False
+
+	if "Address: " in i and int(i.split("Address: ")[1]) == function_offset:
+		log = True
+
+c = open(output_source, "w")
+
+print("ARCH", arch)
 
 # key, list of offsets
-structs = [("V(V(VRDI+8)+24)", [0, 4, 8, 12]), ("V(V(VRDI+8)+16)", [0, 4, 8, 12]), ("V(VRDI+8)", [0, 8, 16, 24]), ("VRDI", [0, 4, 8])]
+#structs = [("V(V(VRDI+8)+24)", [0, 4, 8, 12]), ("V(V(VRDI+8)+16)", [0, 4, 8, 12]), ("V(VRDI+8)", [0, 8, 16, 24]), ("VRDI", [0, 4, 8])]
 # key, size of array (might be inaccurate)
-arrs = [("V(V(VRDI+8))", 6)]
-num_args = 1
+#arrs = [("V(V(VRDI+8))", 6)]
+# create structs
 res = converter(structs, num_args)
 # set arrays
 for i in arrs:
 	set_value(i[0], 0x1 | (i[1] << 8), True)
-code = generate_struct_reader(num_args)
-print(code)
+code, cleanup = generate_struct_reader(num_args)
+final = template_win.format(structs=struct_string, peldr_path=path_to_peldr.replace("\\", "\\\\"), process_path=process_path.replace("\\", "\\\\"), code=code.replace("\n", "\n\t"), func_addr=hex(function_offset + base), args=", ".join(args_list), cleanup=cleanup)
+c.write(final)
+c.close()
