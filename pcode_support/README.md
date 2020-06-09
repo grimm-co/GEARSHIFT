@@ -4,7 +4,7 @@ This code performs symbolic data flow analysis through P-Code's SSA (Static Sing
 
 ### Running
 
-After Ghidra's auto-analysis for a binary, navigate to the function you want to be analyzed, then run the python plugin file as a Ghidra plugin through either Ghidra's script manager or Python console.
+After Ghidra's auto-analysis for a binary, navigate to the function you want to be analyzed, then run the python plugin file `go.py` as a Ghidra plugin through either Ghidra's script manager or Python console. Make sure the other python files are in Ghidra's script path as well.
 
 ### Current results (very much a work in progress)
 
@@ -103,20 +103,40 @@ STORE: *(*(*(ARG1 + (const, 0x8, 8)) + (const, 0x18, 8)))
 
 Results are stored in a binary expression tree, which can then be converted into struct representation.
 
+Struct representation recovered using `stable2`:
+
+```c
+struct S4 {
+	char entry_1
+	char entry_2[3] NOT ACCESSED
+	uint32_t entry_3
+	uint32_t entry_4
+	uint32_t entry_5
+}
+struct S3 {
+	char entry_1
+	char entry_2[3] NOT ACCESSED
+	uint32_t entry_3
+	uint32_t entry_4
+	uint32_t entry_5
+}
+struct S2 {
+	char entry_1
+}
+struct S1 {
+	S2* entry_1
+	uint32_t entry_2
+	uint32_t entry_3 NOT ACCESSED
+	S3* entry_4
+	S4* entry_5
+}
+struct S0 {
+	uint32_t entry_1
+	uint32_t entry_2
+	S1* entry_3
+}
+```
+
 ### TODO
 
-#### Inter-procedural analysis
-
-There are two major types of analysis we want to do: FORWARD and BACKWARD
-
-- To identify the struct usage of a parameter to a function, we do FORWARD analysis on the passed parameter
-- To identify the types of the fields stored into a member of a parameter, we do BACKWARDs analysis on the value stored
-- To identify the types of the fields loaded from a member of a parameter struct, we do FORWARD analysis on the loaded value
-- When a stored value is derived from another function call, we must perform backwards analysis on all the return value of that function
-- When a loaded value is passed into another function call, we must perform forwards analysis on that parameter to determine its struct type
-
-#### Function analysis caching
-
-We should never run forward analysis on the same function twice. This is because we should already know the loads and stores performed on the argument after running it once.
-
-For backward analysis, we are able to cache the results of the first run by using placeholder parameter inputs, and the return types based on these placeholders. Therefore, the next run, we just DFS to replace all the placeholder inputs with our actual parameters and then we have obtained the return type.
+#### Array identification and length identification?
