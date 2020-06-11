@@ -3,12 +3,21 @@ class Struct:
 		self.size = size # Total size of the struct
 		self.members = [(0, 1)] * size # Represents member (value, member_size)
 		self.marked = [False] * size # Marked represents offsets in the struct that are accessed
+		self.is_array = False
 
 	def __str__(self):
 		return str(self.members)
 
 	def __repr__(self):
 		return self.__str__()
+
+	def make_array(self):
+		self.is_array = True
+		stride = self.members[0][1]
+		for i in range(len(self.members)):
+			if self.members[i][1] != stride:
+				raise Exception("Array stride different")
+		self.stride = stride
 
 	# Consolidates struct members of size 1 into a char array
 	def consolidate(self):
@@ -131,49 +140,58 @@ class Struct:
 		self.name = "S{}".format(struct_counter)
 		struct_counter += 1
 
-		c = 0
+		c = -1
 		length = 0
-		entry_counter = 0
+		entry_counter = -1
 		while length < self.size:
+			c += 1
 			entry_counter += 1
 			if isinstance(self.members[c][0], Struct):
-				res += "\tS{}* entry_{}\n".format(struct_counter, entry_counter)
-				res = self.members[c][0].pretty_print() + "\n" + res
 				length += ARCH_BITS / 8
-				c += 1
-				continue
+				if not self.members[c][0].is_array:
+					res += "\tS{}* entry_{}\n".format(struct_counter, entry_counter)
+					res = self.members[c][0].pretty_print() + "\n" + res
+					continue
+				else:
+					res += "\tuint{}_t* entry_{}\n".format(self.members[c][0].stride * 8, entry_counter)
+					continue
 			res += self.get_field(self.members[c][1], entry_counter) + "\n"
 			if len(self.members[c]) > 2:
 				res = res[:-1] + " NOT ACCESSED\n"
 			length += self.members[c][1]
-			c += 1
 		return res + "}"
 
 def do_read(struct, current_reference):
 	ret = ""
 	clean = ""
-	curoff = 0
-	total_length = 0
-	for i in range(len(struct.members)):
-		total_length += struct.members[i][1]
-	ret += "{} = ({}*)malloc({});\n".format(current_reference, struct.name, total_length)
-	for i in range(len(struct.members)):
-		value = struct.members[i][0]
-		length = struct.members[i][1]
-		if type(value) is int and value & 0xff == 0x0:
-			ret += "fread((char*)&{}->entry_{}, 1, {}, h);\n".format(current_reference, i, length)
-		elif type(value) is int and value & 0xff == 0x1:
-			# TODO: better array length
-			ret += "{}->entry_{} = (char*)malloc({});\n".format(current_reference, i, (value >> 8) + 1);
-			ret += "{}->entry_{}[{}] = 0;\n".format(current_reference, i, (value >> 8));
-			ret += "fread({}->entry_{}, 1, {}, h);\n" .format(current_reference, i, value >> 8)
-			clean += "\tfree({}->entry_{});".format(current_reference, i)
-		else:
-			r, c = do_read(value, current_reference + "->entry_{}".format(i))
-			ret += r
-			clean += c
-		curoff += length
-	clean += "free({});\n".format(current_reference)
+
+	if not struct.is_array:
+		curoff = 0
+		total_length = 0
+		for i in range(len(struct.members)):
+			total_length += struct.members[i][1]
+		ret += "{} = ({}*)malloc({});\n".format(current_reference, struct.name, total_length)
+		for i in range(len(struct.members)):
+			value = struct.members[i][0]
+			length = struct.members[i][1]
+			if type(value) is int and value & 0xff == 0x0:
+				ret += "fread((char*)&{}->entry_{}, 1, {}, h);\n".format(current_reference, i, length)
+			elif type(value) is int and value & 0xff == 0x1:
+				# TODO: better array length
+				ret += "{}->entry_{} = (char*)malloc({});\n".format(current_reference, i, (value >> 8) + 1);
+				ret += "{}->entry_{}[{}] = 0;\n".format(current_reference, i, (value >> 8));
+				ret += "fread({}->entry_{}, 1, {}, h);\n" .format(current_reference, i, value >> 8)
+				clean += "\tfree({}->entry_{});".format(current_reference, i)
+			else:
+				r, c = do_read(value, current_reference + "->entry_{}".format(i))
+				ret += r
+				clean += c
+			curoff += length
+		clean += "free({});\n".format(current_reference)
+	else:
+		ret += "{} = (char*)malloc({});\n".format(current_reference, 8 * struct.stride)
+		ret += "fread((char*){}, 1, {}, h);\n".format(current_reference, 8 * struct.stride);
+		clean += "\tfree({});\n".format(current_reference)
 	return ret, clean
 
 def generate_struct_reader(args):
@@ -187,7 +205,7 @@ def generate_struct_reader(args):
 			code += "fread(&{}, 1, 8, h);\n".format(x8664_args[i])
 		else:
 			cur = args[i]
-			if isinstance(cur, Struct):
+			if isinstance(cur, Struct) and not cur.is_array:
 				# struct
 				arg_names.append("ARG{}".format(i))
 				code += cur.name + "* ARG{};\n".format(i)

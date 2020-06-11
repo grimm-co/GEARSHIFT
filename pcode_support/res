@@ -1,49 +1,3 @@
-# Symbolic Data Flow Analysis on Ghidra's P-Code IL
-
-This code performs symbolic data flow analysis through P-Code's SSA (Static Single Assignment) form, and records loads and stores performed on the parameters to a function to identify its struct. Works on all architectures supported by Ghidra.
-
-### Usage
-
-After Ghidra's auto-analysis for a binary, navigate to the function you want to be analyzed, then run the python plugin file `go.py` as a Ghidra plugin through either Ghidra's script manager or Python console. Make sure the other python files are in Ghidra's script path as well.
-
-### Key Ideas
-
-- Symbolic IL (p-code) SSA representation analysis to identify stores and loads
-- Interprocedural analysis through forwards and backwards analysis. Forwards analysis identifies the stores and loads performed on a function argument. Backward analysis relates the return value of a function to function arguments. These two ideas can utilize memoization.
-- To find arrays, loop variant variables in the pcode are identified. Two runs are performed with loop variants having different initial conditions. If the members between two runs of a struct is different and stride is consistent, then that struct is an array.
-- TODO: find subarrays within structs, instead of full arrays
-
-### Current results (very much a work in progress)
-
-In a toy program with the following structs
-
-```c
-typedef struct {
-  char haha;
-  int L;
-  int L2;
-  int L3;
-} dec2;
-
-typedef struct {
-  char* buf;
-  int length;
-  dec2* lol;
-  dec2* lol2;
-} dec;
-
-typedef struct {
-  int return_code;
-  int return_value;
-  dec* buf;
-} hack;
-```
-
-Results are stored in a binary expression tree, which can then be converted into struct representation.
-
-Struct representation and harness recovered using `stable2`:
-
-```c
 #include <stdio.h>
 #include <stdlib.h>
 #include <dlfcn.h>
@@ -119,4 +73,5 @@ int main(int argc, char** argv) {
 
 	printf("Result: %d\n", res);
 }
-```
+
+

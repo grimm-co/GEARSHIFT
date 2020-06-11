@@ -8,12 +8,17 @@ forward_cache = {}
 backward_cache = {}
 highfunction_cache = {}
 
+cycle_node = Node("CYCLE", None, None, 0)
+
 class PCodeInterpreter:
 	def __init__(self):
 		self.nodes = {}
-		self.danger_cycle = []
 		self.stores = []
 		self.loads = []
+		self.instruction = None
+		self.cycle_exec = {}
+		self.loop_variants = set()
+		self.arrays = []
 
 	def process(self, instruction, depth):
 		opcode = instruction.getOpcode()
@@ -25,8 +30,19 @@ class PCodeInterpreter:
 		# else:
 		# 	print "Instruction", inputs[0].getPCAddress(), instruction, depth
 
+		saved_instruction = self.instruction
+		self.instruction = instruction
+
 		if opcode == PcodeOp.INT_ADD:
 			self.int_add(inputs, output)
+		elif opcode == PcodeOp.INT_SDIV:
+			self.int_sdiv(inputs, output)
+		elif opcode == PcodeOp.INT_DIV:
+			self.int_div(inputs, output)
+		elif opcode == PcodeOp.INT_SREM:
+			self.int_srem(inputs, output)
+		elif opcode == PcodeOp.INT_REM:
+			self.int_rem(inputs, output)
 		elif opcode == PcodeOp.INT_RIGHT:
 			self.int_right(inputs, output)
 		elif opcode == PcodeOp.INT_LEFT:
@@ -53,6 +69,8 @@ class PCodeInterpreter:
 			self.int_sless(inputs, output)
 		elif opcode == PcodeOp.INT_SLESSEQUAL:
 			self.int_slessequal(inputs, output)
+		elif opcode == PcodeOp.INT_2COMP:
+			self.int_2comp(inputs, output)
 		elif opcode == PcodeOp.PTRSUB:
 			self.ptrsub(inputs, output)
 		elif opcode == PcodeOp.STORE:
@@ -86,124 +104,174 @@ class PCodeInterpreter:
 		else:
 			print "Unsupported Opcode:", instruction.getMnemonic()
 
+		self.instruction = saved_instruction
+
+	def int_sdiv(self, inputs, output):
+		assert len(inputs) == 2 and output is not None
+		a = inputs[0]
+		b = inputs[1]
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.sdiv(j))
+
+	def int_div(self, inputs, output):
+		assert len(inputs) == 2 and output is not None
+		a = inputs[0]
+		b = inputs[1]
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.div(j))
+
+	def int_srem(self, inputs, output):
+		assert len(inputs) == 2 and output is not None
+		a = inputs[0]
+		b = inputs[1]
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.smod(j))
+
+	def int_rem(self, inputs, output):
+		assert len(inputs) == 2 and output is not None
+		a = inputs[0]
+		b = inputs[1]
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.mod(j))
+
 	def int_add(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
 		a = inputs[0]
 		b = inputs[1]
 		if (a.isConstant() and b.isConstant()) or a.isConstant():
 			raise Exception("INT_ADD error")
-		result = self.lookup_node(a).add(self.lookup_node(b))
-		assert result.byte_length == output.getSize()
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.add(j))
 
 	def int_right(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).shr(self.lookup_node(b))
-		assert result.byte_length == output.getSize()
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.shr(j))
 
 	def int_left(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).shl(self.lookup_node(b))
-		assert result.byte_length == output.getSize()
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.shl(j))
 
 	def int_and(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).bitwise_and(self.lookup_node(b))
-		assert result.byte_length == output.getSize()
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.bitwise_and(j))
 
 	def int_sub(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).sub(self.lookup_node(b))
-		assert result.byte_length == output.getSize()
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.sub(j))
 
 	def int_or(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).bitwise_or(self.lookup_node(b))
-		assert result.byte_length == output.getSize()
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.bitwise_or(j))
 
 	def int_negate(self, inputs, output):
 		assert len(inputs) == 1 and output is not None
 		a = inputs[0]
-		result = self.lookup_node(a).neg()
-		assert result.byte_length == output.getSize()
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			self.store_node(output, i.neg())
 
 	def int_xor(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).bitwise_xor(self.lookup_node(b))
-		assert result.byte_length == output.getSize()
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.bitwise_xor(j))
 
 	def int_equal(self, inputs, output):
 		assert output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).eq(self.lookup_node(b))
-		if result.byte_length != output.getSize():
-			result = result.resize(output.getSize())
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				res = i.eq(j)
+				if res.byte_length != output.getSize():
+					res = res.resize(output.getSize())
+				self.store_node(output, res)
 
 	def int_notequal(self, inputs, output):
 		assert output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).neq(self.lookup_node(b))
-		if result.byte_length != output.getSize():
-			result = result.resize(output.getSize())
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				res = i.neq(j)
+				if res.byte_length != output.getSize():
+					res = res.resize(output.getSize())
+				self.store_node(output, res)
 
 	def int_less(self, inputs, output):
 		assert output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).lt(self.lookup_node(b))
-		if result.byte_length != output.getSize():
-			result = result.resize(output.getSize())
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				res = i.lt(j)
+				if res.byte_length != output.getSize():
+					res = res.resize(output.getSize())
+				self.store_node(output, res)
 
 	def int_lessequal(self, inputs, output):
 		assert output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).le(self.lookup_node(b))
-		if result.byte_length != output.getSize():
-			result = result.resize(output.getSize())
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				res = i.le(j)
+				if res.byte_length != output.getSize():
+					res = res.resize(output.getSize())
+				self.store_node(output, res)
 
 	def int_sless(self, inputs, output):
 		assert output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).slt(self.lookup_node(b))
-		if result.byte_length != output.getSize():
-			result = result.resize(output.getSize())
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				res = i.slt(j)
+				if res.byte_length != output.getSize():
+					res = res.resize(output.getSize())
+				self.store_node(output, res)
 
 	def int_slessequal(self, inputs, output):
 		assert output is not None
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).sle(self.lookup_node(b))
-		if result.byte_length != output.getSize():
-			result = result.resize(output.getSize())
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				res = i.sle(j)
+				if res.byte_length != output.getSize():
+					res = res.resize(output.getSize())
+				self.store_node(output, res)
+
+	def int_2comp(self, inputs, output):
+		assert len(inputs) == 1 and output is not None
+		for i in self.lookup_node(inputs[0]):
+			self.store_node(output, i.neg())
 
 	def ptrsub(self, inputs, output):
 		assert len(inputs) == 2
@@ -212,84 +280,92 @@ class PCodeInterpreter:
 		b = inputs[1]
 		if not b.isConstant():
 			raise Exception("PTRSUB error")
-		result = self.lookup_node(a).add(self.lookup_node(b))
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.add(j))
 
 	def store(self, inputs, output):
 		assert len(inputs) == 3
 		# TODO: record struct store and perform backwards analysis on the stored value to find its type
-		temp = self.lookup_node(inputs[1]).ptr_deref()
-		if temp.byte_length != inputs[2].getSize():
-			temp = temp.resize(inputs[2].getSize())
-		self.stores.append(temp)
-		# print "STORE:", self.lookup_node(inputs[1]).ptr_deref()
+		for i in self.lookup_node(inputs[1]):
+			for j in self.lookup_node(inputs[2]):
+				temp = i.ptr_deref()
+				if temp.byte_length != j.byte_length:
+					temp = temp.resize(j.byte_length)
+				self.stores.append(temp)
+				# print "STORE:", temp
 
 	def load(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
-		value = self.lookup_node(inputs[1]).ptr_deref()
-		if value.byte_length != output.getSize():
-			value = value.resize(output.getSize())
-		assert value.byte_length == output.getSize()
-		self.store_node(output, value)
-		# TODO: record struct load and perform forwards analysis on the loaded value to find out its type
-		self.loads.append(value)
-		# print "LOAD:", value
+		for i in self.lookup_node(inputs[1]):
+			value = i.ptr_deref()
+			if value.byte_length != output.getSize():
+				value = value.resize(output.getSize())
+			self.store_node(output, value)
+			self.loads.append(value)
+			# print "LOAD:", value
 
 	def subpiece(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
 		# TODO: am I understanding this instruction correctly?
-		value = self.lookup_node(inputs[0]).shr(self.lookup_node(inputs[1]).mult(8))
-		if value.byte_length != output.getSize():
-			value = value.resize(output.getSize())
-		self.store_node(output, value)
+		for i in self.lookup_node(inputs[0]):
+			for j in self.lookup_node(inputs[1]):
+				value = i.shr(j.mult(8))
+				if value.byte_length != output.getSize():
+					value = value.resize(output.getSize())
+				self.store_node(output, value)
 
 	def cast(self, inputs, output):
 		assert len(inputs) == 1 and output is not None
-		value = self.lookup_node(inputs[0])
-		assert value.byte_length == output.getSize()
-		self.store_node(output, value)
+		for value in self.lookup_node(inputs[0]):
+			assert value.byte_length == output.getSize()
+			self.store_node(output, value)
 
 	def multiequal(self, inputs, output):
 		assert output is not None and len(inputs) >= 2
 		possibilities = []
+		count = 0
 		for i in inputs:
 			result = self.lookup_node(i)
-			possibilities.append(result)
-		# TODO: support multiequal list values everywhere, right now we only use one value lol
-		print "Multiequal", possibilities, output.getPCAddress()
-		self.store_node(output, possibilities[0])
+			for j in result:
+				possibilities.append(j)
+				self.store_node(output, j)
+		self.loop_variants.add(output)
+
+		# TODO: prune possibilities
+		print "Multiequal", possibilities
 
 	def int_sext(self, inputs, output):
 		assert output is not None and len(inputs) == 1
-		self.store_node(output, self.lookup_node(inputs[0]).resize(output.getSize()))
+		for i in self.lookup_node(inputs[0]):
+			self.store_node(output, i.resize(output.getSize()))
 
 	def int_zext(self, inputs, output):
 		# TODO: better modeling later
 		assert output is not None and len(inputs) == 1
-		self.store_node(output, self.lookup_node(inputs[0]).resize(output.getSize()))
+		for i in self.lookup_node(inputs[0]):
+			self.store_node(output, i.resize(output.getSize()))
 
 	def int_mult(self, inputs, output):
 		assert output is not None and len(inputs) == 2
 		a = inputs[0]
 		b = inputs[1]
-		result = self.lookup_node(a).mult(self.lookup_node(b))
-		assert output.getSize() == result.byte_length
-		self.store_node(output, result)
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				result = i.mult(j)
+				self.store_node(output, result)
 
 	def ptradd(self, inputs, output):
 		assert output is not None and len(inputs) == 3
 		assert inputs[2].isConstant() and not inputs[0].isConstant()
-		a = self.lookup_node(inputs[0])
-		b = inputs[1]
-		c = inputs[2]
-		if b.isConstant():
-			temp = Node(Varnode(c.getAddress().getNewAddress(b.getOffset() * c.getOffset()), output.getSize()), None, None, output.getSize())
-		else:
-			temp = self.lookup_node(b).mult(self.lookup_node(c))
-		result = a.add(temp)
-		assert output.getSize() == result.byte_length
-		# TODO: maybe use this as struct information?
-		self.store_node(output, result)
+		for a in self.lookup_node(inputs[0]):
+			for b in self.lookup_node(inputs[1]):
+				for c in self.lookup_node(inputs[2]):
+					temp = b.mult(c)
+					result = a.add(temp)
+					assert output.getSize() == result.byte_length
+					# TODO: maybe use this as struct information?
+					self.store_node(output, result)
 
 	def call(self, inputs, output):
 		assert len(inputs) >= 1
@@ -306,21 +382,31 @@ class PCodeInterpreter:
 		if called_func not in forward_cache:
 			pci_new = PCodeInterpreter()
 			parameter_varnodes = analyzeFunctionForward(called_func, pci_new)
-			forward_cache[called_func] = (pci_new.stores, pci_new.loads, map(pci_new.lookup_node, parameter_varnodes))
+			parameter_nodes = []
+			for i in parameter_varnodes:
+				parameter_nodes.append(pci_new.lookup_node(i)[0])
+			forward_cache[called_func] = (pci_new.stores, pci_new.loads, parameter_nodes)
 
 		stores, loads, parameter_node_objects = forward_cache[called_func]
+		# if called_func.name == "insert":
+		# 	print(stores)
+		# 	print(loads)
+		# 	print(parameter_node_objects)
+		# 	raise Exception("PENIS")
 		input_node_objects = map(self.lookup_node, inputs[1:])
+		# TODO: modify for multi value
 		for i in stores:
-			self.stores.append(i.replace_base_parameters(parameter_node_objects, input_node_objects))
+			arg_idx = i.find_base_idx(parameter_node_objects, input_node_objects)
+			if arg_idx is not None:
+				node_objects = self.lookup_node(inputs[1:][arg_idx])
+				for j in node_objects:
+					self.stores.append(i.replace_base_parameters(parameter_node_objects, j))
 		for i in loads:
-			self.loads.append(i.replace_base_parameters(parameter_node_objects, input_node_objects))
-		if called_func.getName() == "insert":
-			print("DICE")
-			print(input_node_objects)
-			print(stores)
-			print(loads)
-			print(self.stores[-len(stores):])
-			print(self.loads[-len(loads):])
+			arg_idx = i.find_base_idx(parameter_node_objects, input_node_objects)
+			if arg_idx is not None:
+				node_objects = self.lookup_node(inputs[1:][arg_idx])
+				for j in node_objects:
+					self.loads.append(i.replace_base_parameters(parameter_node_objects, j))
 			# raise Exception("L")
 		#print(stores, loads)
 		# print("END CALL RECURSIVE FORWARD ANALYSIS")
@@ -339,39 +425,85 @@ class PCodeInterpreter:
 
 			ret_type, subfunc_parameter_node_objs = backward_cache[called_func]
 			replaced_rets = []
-			for i in ret_type:
-				replaced_rets.append(i.replace_base_parameters(subfunc_parameter_node_objs, input_node_objects))
+			for a in ret_type:
+				for i in a:
+					arg_idx = i.find_base_idx(subfunc_parameter_node_objs, input_node_objects)
+					if arg_idx is None:
+						node_objects = [1] # Doesn't matter
+					else:
+						node_objects = self.lookup_node(inputs[1:][arg_idx])
+					for j in node_objects:
+						replaced_rets.append(i.replace_base_parameters(subfunc_parameter_node_objs, j))
 
 			# TODO: support multiple return type analysis (similar to multiequal), right now we use one
-			self.store_node(output, replaced_rets[0])
+			for i in range(len(replaced_rets)):
+				self.store_node(output, replaced_rets[i])
+			# self.store_node(output, replaced_rets[0])
 
 	def copy(self, inputs, output):
 		assert len(inputs) == 1 and output is not None
-		result = self.lookup_node(inputs[0])
-		self.store_node(output, result)
+		for result in self.lookup_node(inputs[0]):
+			self.store_node(output, result)
 
 	def indirect(self, inputs, output):
 		# TODO: model more effectively in the future? Not sure what inputs[1] does
-		value = self.lookup_node(inputs[0])
-		assert value.byte_length == output.getSize()
-		self.store_node(output, value)
+		for value in self.lookup_node(inputs[0]):
+			assert value.byte_length == output.getSize()
+			self.store_node(output, value)
 
 	# maps a Ghidra Varnode object to a binary tree object that represents its expression
 	def lookup_node(self, varnode):
 		# Detect cycle
-		if varnode in self.nodes and self.nodes[varnode] == "CYCLE":
-			# print("Cycle detected")
-			self.nodes[varnode] = Node("CYCLE", None, None, varnode.getSize())
-		elif varnode.isConstant():
+		# print("Lookup", varnode)
+		if varnode in self.cycle_exec:
+			self.cycle_exec[varnode] += 1
+		if varnode in self.cycle_exec and self.cycle_exec[varnode] > 0:
+			print "CYCLE DETECTED", varnode
+			print "CYCLE OPERATION", self.instruction
+			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
+			if varnode not in self.nodes:
+				self.store_node(varnode, Node(("CYCLE", varnode), None, None, varnode.getSize()))
+			return self.nodes[varnode]
+		"""
+		if varnode in self.nodes and varnode in self.cycle_exec:
+			print "CYCLE DETECTED", varnode
+			print "CYCLE OPERATION", self.instruction
+			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
+			for i in self.nodes[varnode]:
+				i.cyclic = True
+				print("Make cyclic", i)
+			ins1 = varnode.getDef()
+			ins2 = self.instruction
+			print ins1.getOutput().getPCAddress(), ins1
+			print ins2.getInputs()[0].getPCAddress(), ins2
+
+			# Here we want to undefine the loop variant, then 
+
+		elif varnode.isConstant():"""
+		if varnode.isConstant():
 			# create constant node
-			return Node(varnode, None, None, varnode.getSize())
+			return [Node(varnode, None, None, varnode.getSize())]
 		elif varnode.isAddress():
-			return Node(varnode, None, None, varnode.getSize())
-		elif varnode not in self.nodes:
+			return [Node(varnode, None, None, varnode.getSize())]
+		elif varnode not in self.nodes or varnode in self.cycle_exec:
 			# We have to detect cycles here, by temporarily storing "CYCLE", and if the returned value is "CYCLE", we know there is cycle
-			self.store_node(varnode, "CYCLE")
+			# self.store_node(varnode, cycle_node)
+			if varnode not in self.cycle_exec:
+				self.cycle_exec[varnode] = 0
+			
+			# print("START CYCLE")
 			self.get_node_definition(varnode)
+			# print("END CYCLE")
+
+			if self.cycle_exec[varnode] == 0:
+				del self.cycle_exec[varnode]
+
 			return self.lookup_node(varnode)
+		# print("Lookup Result", self.nodes[varnode])
+
+		# Prune
+		if len(self.nodes[varnode]) > 10:
+			self.nodes[varnode] = self.nodes[varnode][:10]
 		return self.nodes[varnode]
 
 	# recursively backwards traces for node's definition
@@ -382,17 +514,16 @@ class PCodeInterpreter:
 		if defining_instruction is None:
 			# TODO: fix this? I'm not sure what causes this error
 			print("WARNING: Orphaned varnode? - assuming multiequal analyzation error and skipping")
-			self.nodes[varnode] = Node("ORPHANED", None, None, varnode.getSize())
+			self.nodes[varnode] = [Node("ORPHANED", None, None, varnode.getSize())]
 			return
 		self.process(defining_instruction, -1)
 
 	# stores mapping between Ghidra varnode and binary tree obj
 	def store_node(self, varnode, nodeobj):
-		self.nodes[varnode] = nodeobj
-
-	# returns a copy of the current tree
-	def deep_copy(self):
-		pass
+		if varnode not in self.nodes:
+			self.nodes[varnode] = []
+		if (nodeobj.relevant() or len(self.nodes[varnode]) == 0) and hash(nodeobj) not in map(hash, self.nodes[varnode]):
+			self.nodes[varnode].append(nodeobj)
 
 def get_highfunction(func):
 	if func not in highfunction_cache:
@@ -464,9 +595,9 @@ def analyzeFunctionBackward(func, pci, init_param=None):
 	# Sets argument as base cases
 	for arg in range(len(argument_varnodes)):
 		if init_param is None:
-			pci.nodes[argument_varnodes[arg]] = Node("ARG"  + str(arg), None, None, argument_varnodes[arg].getSize())
+			pci.store_node(argument_varnodes[arg], Node("ARG"  + str(arg), None, None, argument_varnodes[arg].getSize()))
 		else:
-			pci.nodes[argument_varnodes[arg]] = init_param[arg]
+			pci.store_node(argument_varnodes[arg], init_param[arg])
 
 	return_types = []
 	for i in return_varnodes:
@@ -493,17 +624,45 @@ def analyzeFunctionForward(func, pci):
 	# get the varnode of function parameters
 	func_proto = hf.getFunctionPrototype()
 	argument_varnodes = []
+	argument_nodes = []
 	for i in range(func_proto.getNumParams()):
 		argument_varnodes.append(func_proto.getParam(i).getRepresentative())
+		argument_nodes.append(Node("ARG"  + str(i), None, None, argument_varnodes[i].getSize()))
 
-	visited = set()
+	hash_list = []
 
-	# print("Return Node:", ret_varnode)
-	for arg in range(len(argument_varnodes)):
-		pci.nodes[argument_varnodes[arg]] = Node("ARG"  + str(arg), None, None, argument_varnodes[arg].getSize())
+	for a in range(2):
+		print("Loop variants", map(id, pci.loop_variants))
 
-	# recursively traverse the varnode descendants to get reaching definitions
-	for i in argument_varnodes:
-		traverseForward(i, 0, pci, visited)
+		variant_vals = []
+		new_nodes = {}
+
+		for i in pci.loop_variants:
+			print("VAR", i)
+			print(pci.nodes[i])
+			new_nodes[i] = pci.nodes[i]
+			del pci.nodes[i]
+		visited = set()
+
+		pci.nodes = new_nodes
+
+		# print("Return Node:", ret_varnode)
+		for arg in range(len(argument_varnodes)):
+			pci.store_node(argument_varnodes[arg], argument_nodes[arg])
+
+		# recursively traverse the varnode descendants to get reaching definitions
+		for i in argument_varnodes:
+			traverseForward(i, 0, pci, visited)
+
+		if a == 0:
+			for i in pci.stores + pci.loads:
+				hash_list.append(hash(i))
+			continue
+
+		temp = pci.stores + pci.loads
+
+		for i in range(len(temp))[::-1]:
+			if hash(temp[i]) not in hash_list:
+				pci.arrays.append(temp[i])
 
 	return argument_varnodes

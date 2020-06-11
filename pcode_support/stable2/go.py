@@ -41,6 +41,8 @@ We should never run forward analysis on the same function twice. This is because
 For backward analysis, we are able to cache the results of the first run by using placeholder parameter inputs, and the return types based on these placeholders. Therefore, the next run, we just DFS to replace all the placeholder inputs with our actual parameters and then we have obtained the return type.
 
 TODO: test recursive function analysis
+
+To identify arrays, we use the idea of loop variants. A loop variant is the output from a multiequal pcode op. When running analysis multiple times with different loop variant initial conditions, the loop variant changes each run. The loads or stores that change are likely array loads and stores. Using the differences in struct accesses, we can infer which ones are arrays, and the stride of the array.
 """
 
 start = time.time()
@@ -59,16 +61,22 @@ argument_varnodes = PCodeInterpreter.analyzeFunctionForward(currentFunction, pci
 
 important_stores = []
 important_loads = []
-argument_node_objs = map(pci.lookup_node, argument_varnodes)
+argument_node_objs = []
+for i in argument_varnodes:
+	argument_node_objs += pci.lookup_node(i)
 argument_structs = [None] * len(argument_varnodes)
+
 for i in pci.stores:
 	if i.contains(argument_node_objs):
 		important_stores.append(i)
+		# print(i)
 for i in pci.loads:
 	if i.contains(argument_node_objs):
 		important_loads.append(i)
+		# print(i)
 
 print("Start creating struct")
+print(pci.arrays)
 
 args = []
 for i in range(len(argument_structs)):
@@ -76,12 +84,16 @@ for i in range(len(argument_structs)):
 for i in (important_stores + important_loads):
 	simplified = i.simplify()
 	try:
-		simplified.create_struct(args, simplified.byte_length)
+		substruct, offset, grand = simplified.create_struct(args, simplified.byte_length)
+		if i in pci.arrays:
+			grand[0].make_array()
+			print "Make array", i
 		# print(str(simplified))
 	except ValueError as e:
 		print(e)
 
 struct_defs = args[0].pretty_print()
+print(struct_defs)
 
 code, cleanup, arg_names = Struct.generate_struct_reader(args)
 print(struct_defs)

@@ -70,21 +70,43 @@ class Node:
 	def __repr__(self):
 		return '"' + self.__str__() + '"'
 
+	def __hash__(self):
+		ret = hash(str(self))
+		return ret
+
+	def relevant(self):
+		good = self.operation in ("+", "*()", "RESIZE", "*") or (self.is_leaf() and str(self.operation).startswith("ARG")) or (isinstance(self.operation, Varnode) and self.operation.isConstant())
+		if isinstance(self.left, Node):
+			good = good and self.left.relevant()
+		if isinstance(self.right, Node):
+			good = good and self.right.relevant()
+		return good
+
 	def contains(self, nodes):
 		if self is None:
 			return False
 		return self in nodes or (isinstance(self.left, Node) and self.left.contains(nodes)) or (isinstance(self.right, Node) and self.right.contains(nodes))
 
-	# replaces instances of old_params in the binary tree with instance in new_params, and makes a copy of all nodes
-	def replace_base_parameters(self, old_params, new_params):
+	def find_base_idx(self, old_params, new_params):
 		if self in old_params:
 			idx = old_params.index(self)
-			return new_params[idx]
+			return idx
+		res = None
+		if isinstance(self.left, Node) and res is None:
+			res = self.left.find_base_idx(old_params, new_params)
+		if isinstance(self.right, Node) and res is None:
+			res = self.right.find_base_idx(old_params, new_params)
+		return res
+
+	#replaces instances of old_params in the binary tree with instance in new_params, and makes a copy of all nodes
+	def replace_base_parameters(self, old_params, new_param):
+		if self in old_params:
+			return new_param
 		ret = self.shallow_copy()
 		if isinstance(ret.left, Node):
-			ret.left = ret.left.replace_base_parameters(old_params, new_params)
+			ret.left = ret.left.replace_base_parameters(old_params, new_param)
 		if isinstance(ret.right, Node):
-			ret.right = ret.right.replace_base_parameters(old_params, new_params)
+			ret.right = ret.right.replace_base_parameters(old_params, new_param)
 		return ret
 
 	def simplify(self):
@@ -93,21 +115,24 @@ class Node:
 			print("Can simplify")
 			temp = self.left.operation
 			temp2 = self.right.operation
-			return Node(Varnode(temp.getAddress().getNewAddress(temp.getOffset() * temp2.getOffset()), temp.getSize()), None, None, temp.getSize())
+			ret = Node(Varnode(temp.getAddress().getNewAddress(temp.getOffset() * temp2.getOffset()), temp.getSize()), None, None, temp.getSize())
+			return ret
 		elif self.operation == "+" and (isinstance(self.left.operation, Varnode) and self.left.operation.isConstant()) and (isinstance(self.right.operation, Varnode) and self.right.operation.isConstant()) and self.left.operation.getSize() == self.right.operation.getSize():
 			print("Can simplify")
 			temp = self.left.operation
 			temp2 = self.right.operation
-			return Node(Varnode(temp.getAddress().getNewAddress(temp.getOffset() + temp2.getOffset()), temp.getSize()), None, None, temp.getSize())
+			ret = Node(Varnode(temp.getAddress().getNewAddress(temp.getOffset() + temp2.getOffset()), temp.getSize()), None, None, temp.getSize())
+			return ret
 		ret = self.shallow_copy()
 		if ret.left is not None:
 			ret.left = ret.left.simplify()
 		if ret.right is not None:
 			ret.right = ret.right.simplify()
-		return ret 
+		return ret
 
 	def shallow_copy(self):
-		return Node(self.operation, self.left, self.right, self.byte_length)
+		ret = Node(self.operation, self.left, self.right, self.byte_length)
+		return ret
 
 	def is_leaf(self):
 		return self.left is None and self.right is None
@@ -165,3 +190,14 @@ class Node:
 
 	def neg(self):
 		return Node("~", self, None, self.byte_length)
+
+	def sdiv(self, other):
+		return Node("s/", self, other, self.byte_length)
+
+	def smod(self, other):
+		return Node("s%", self, other, self.byte_length)
+
+	def mod(self, other):
+		return Node("%", self, other, self.byte_length)
+
+
