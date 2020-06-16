@@ -3,6 +3,12 @@ from ghidra.program.model.pcode import Varnode
 from ghidra.program.flatapi import FlatProgramAPI
 from Node import Node
 from Struct import Struct
+from ghidra.program.model.pcode import HighFunctionDBUtil
+from ghidra.program.model.symbol import SourceType
+from ghidra.program.model.data import Undefined
+from ghidra.app.cmd.function import ApplyFunctionSignatureCmd
+
+NODE_LIMIT = 10
 
 forward_cache = {}
 backward_cache = {}
@@ -79,6 +85,8 @@ class PCodeInterpreter:
 			self.load(inputs, output)
 		elif opcode == PcodeOp.SUBPIECE:
 			self.subpiece(inputs, output)
+		elif opcode == PcodeOp.PIECE:
+			self.piece(inputs, output)
 		elif opcode == PcodeOp.CAST:
 			self.cast(inputs, output)
 		elif opcode == PcodeOp.MULTIEQUAL:
@@ -93,6 +101,8 @@ class PCodeInterpreter:
 			self.ptradd(inputs, output)
 		elif opcode == PcodeOp.CALL:
 			self.call(inputs, output)
+		elif opcode == PcodeOp.CALLIND:
+			self.callind(inputs, output)
 		elif opcode == PcodeOp.COPY:
 			self.copy(inputs, output)
 		elif opcode == PcodeOp.INDIRECT:
@@ -102,7 +112,7 @@ class PCodeInterpreter:
 		elif opcode == PcodeOp.CBRANCH:
 			pass
 		else:
-			print "Unsupported Opcode:", instruction.getMnemonic()
+			print "Unsupported Opcode:", instruction.getMnemonic(), inputs[0].getPCAddress(),
 
 		self.instruction = saved_instruction
 
@@ -310,7 +320,17 @@ class PCodeInterpreter:
 		# TODO: am I understanding this instruction correctly?
 		for i in self.lookup_node(inputs[0]):
 			for j in self.lookup_node(inputs[1]):
-				value = i.shr(j.mult(8))
+				value = i.shr(j.mult(Node(currentProgram.getAddressFactory().getConstantAddress(8), None, None, i.byte_length)))
+				if value.byte_length != output.getSize():
+					value = value.resize(output.getSize())
+				self.store_node(output, value)
+
+	def piece(self, inputs, output):
+		assert len(inputs) == 2 and output is not None
+		# TODO: am I understanding this instruction correctly?
+		for i in self.lookup_node(inputs[0]):
+			for j in self.lookup_node(inputs[1]):
+				value = i.shl(Node(currentProgram.getAddressFactory().getConstantAddress(j.byte_length), None, None, i.byte_length)).add(j)
 				if value.byte_length != output.getSize():
 					value = value.resize(output.getSize())
 				self.store_node(output, value)
@@ -367,6 +387,12 @@ class PCodeInterpreter:
 					# TODO: maybe use this as struct information?
 					self.store_node(output, result)
 
+	def callind(self, inputs, output):
+		assert len(inputs) >= 1
+		print "Warning: indirect call - skipping and returning 0"
+		if output is not None:
+			self.store_node(output, Node(Varnode(output.getAddress(), output.getSize()), None, None, output.getSize()))
+
 	def call(self, inputs, output):
 		assert len(inputs) >= 1
 		# First we have to analyze function forward with input arguments
@@ -385,14 +411,9 @@ class PCodeInterpreter:
 			parameter_nodes = []
 			for i in parameter_varnodes:
 				parameter_nodes.append(pci_new.lookup_node(i)[0])
-			forward_cache[called_func] = (pci_new.stores, pci_new.loads, parameter_nodes)
+			forward_cache[called_func] = (pci_new.stores, pci_new.loads, parameter_nodes, pci_new.arrays)
 
-		stores, loads, parameter_node_objects = forward_cache[called_func]
-		# if called_func.name == "insert":
-		# 	print(stores)
-		# 	print(loads)
-		# 	print(parameter_node_objects)
-		# 	raise Exception("PENIS")
+		stores, loads, parameter_node_objects, arrs = forward_cache[called_func]
 		input_node_objects = map(self.lookup_node, inputs[1:])
 		# TODO: modify for multi value
 		for i in stores:
@@ -407,6 +428,13 @@ class PCodeInterpreter:
 				node_objects = self.lookup_node(inputs[1:][arg_idx])
 				for j in node_objects:
 					self.loads.append(i.replace_base_parameters(parameter_node_objects, j))
+		for i in arrs:
+			arg_idx = i.find_base_idx(parameter_node_objects, input_node_objects)
+			if arg_idx is not None:
+				node_objects = self.lookup_node(inputs[1:][arg_idx])
+				for j in node_objects:
+					self.arrays.append(i.replace_base_parameters(parameter_node_objects, j))
+	
 			# raise Exception("L")
 		#print(stores, loads)
 		# print("END CALL RECURSIVE FORWARD ANALYSIS")
@@ -502,8 +530,8 @@ class PCodeInterpreter:
 		# print("Lookup Result", self.nodes[varnode])
 
 		# Prune
-		if len(self.nodes[varnode]) > 10:
-			self.nodes[varnode] = self.nodes[varnode][:10]
+		if len(self.nodes[varnode]) > NODE_LIMIT:
+			self.nodes[varnode] = self.nodes[varnode][:NODE_LIMIT]
 		return self.nodes[varnode]
 
 	# recursively backwards traces for node's definition

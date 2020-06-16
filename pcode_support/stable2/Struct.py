@@ -4,6 +4,9 @@ class Struct:
 		self.members = [(0, 1)] * size # Represents member (value, member_size)
 		self.marked = [False] * size # Marked represents offsets in the struct that are accessed
 		self.is_array = False
+		global struct_counter
+		self.name = "S{}".format(struct_counter)
+		struct_counter += 1
 
 	def __str__(self):
 		return str(self.members)
@@ -127,18 +130,24 @@ class Struct:
 
 	def get_field(self, length, entry_num):
 		if length <= 8 and length & 1 == 0:
-			return "\tuint{}_t entry_{}".format(length * 8, entry_num)
+			return "uint{}_t entry_{};".format(length * 8, entry_num)
 		elif length == 1:
-			return "\tchar entry_{}".format(entry_num)
+			return "char entry_{};".format(entry_num)
 		else:
-			return "\tchar entry_{}[{}]".format(entry_num, length)
+			return "char entry_{}[{}];".format(entry_num, length)
 
 	def pretty_print(self):
 		self.consolidate()
-		global struct_counter
-		res = "struct S{} {{\n".format(struct_counter)
-		self.name = "S{}".format(struct_counter)
-		struct_counter += 1
+
+		# first, we detect if it's size 0, or only has one member
+		if self.size == 0:
+			return ""
+			#return self.get_field(ARCH_BITS / 8, 0).replace("entry_0", "arg_{}".format(argument_number))
+		elif len(self.members) == 1:
+			return ""
+			#return self.get_field(self.members[0][1], 0).replace("entry_0", "*arg_{}".format(argument_number))
+
+		res = "struct {} {{\n".format(self.name)
 
 		c = -1
 		length = 0
@@ -149,16 +158,15 @@ class Struct:
 			if isinstance(self.members[c][0], Struct):
 				length += ARCH_BITS / 8
 				if not self.members[c][0].is_array:
-					res += "\tS{}* entry_{}\n".format(struct_counter, entry_counter)
+					res += "S{}* entry_{};\n".format(struct_counter, entry_counter)
 					res = self.members[c][0].pretty_print() + "\n" + res
-					continue
 				else:
-					res += "\tuint{}_t* entry_{}\n".format(self.members[c][0].stride * 8, entry_counter)
-					continue
-			res += self.get_field(self.members[c][1], entry_counter) + "\n"
-			if len(self.members[c]) > 2:
-				res = res[:-1] + " NOT ACCESSED\n"
-			length += self.members[c][1]
+					res += "uint{}_t* entry_{};\n".format(self.members[c][0].stride * 8, entry_counter)
+			else:
+				res += self.get_field(self.members[c][1], entry_counter) + "\n"
+				if len(self.members[c]) > 2:
+					res = res[:-1] + " NOT ACCESSED\n"
+				length += self.members[c][1]
 		return res + "}"
 
 def do_read(struct, current_reference):
@@ -181,7 +189,7 @@ def do_read(struct, current_reference):
 				ret += "{}->entry_{} = (char*)malloc({});\n".format(current_reference, i, (value >> 8) + 1);
 				ret += "{}->entry_{}[{}] = 0;\n".format(current_reference, i, (value >> 8));
 				ret += "fread({}->entry_{}, 1, {}, h);\n" .format(current_reference, i, value >> 8)
-				clean += "\tfree({}->entry_{});".format(current_reference, i)
+				clean += "free({}->entry_{});".format(current_reference, i)
 			else:
 				r, c = do_read(value, current_reference + "->entry_{}".format(i))
 				ret += r
@@ -191,7 +199,7 @@ def do_read(struct, current_reference):
 	else:
 		ret += "{} = (char*)malloc({});\n".format(current_reference, 8 * struct.stride)
 		ret += "fread((char*){}, 1, {}, h);\n".format(current_reference, 8 * struct.stride);
-		clean += "\tfree({});\n".format(current_reference)
+		clean += "free({});\n".format(current_reference)
 	return ret, clean
 
 def generate_struct_reader(args):
@@ -199,24 +207,30 @@ def generate_struct_reader(args):
 	cleanup = ""
 	arg_names = []
 	for i in range(len(args)):
-		if False:
+		# TODO: ugly code, maybe improve in the future
+		arg_names.append("arg_{}".format(i))
+		if args[i].size == 0:
 			# this is an int
-			code += "uint64_t {};\n".format(x8664_args[i]);
-			code += "fread(&{}, 1, 8, h);\n".format(x8664_args[i])
+			code += args[i].get_field(ARCH_BITS / 8, 0).replace("entry_0", "arg_{}".format(i)) + "\n"
+			code += "fread(&arg_{}, 1, 8, h);\n".format(i)
+		elif len(args[i].members) == 1:
+			# this is a primitive pointer
+			code += args[i].get_field(ARCH_BITS / 8, 0).replace("entry_0", "temp_arg_{}".format(i)) + "\n"
+			code += args[i].get_field(ARCH_BITS / 8, 0).replace("entry_0", "*arg_{}".format(i))[:-1] + " = &temp_arg_{};\n".format(i)
+			code += "fread(arg_{}, 1, 8, h);\n".format(i)
 		else:
 			cur = args[i]
 			if isinstance(cur, Struct) and not cur.is_array:
 				# struct
-				arg_names.append("ARG{}".format(i))
-				code += cur.name + "* ARG{};\n".format(i)
-				res, clean = do_read(cur, "ARG{}".format(i))
+				code += cur.name + "* arg_{};\n".format(i)
+				res, clean = do_read(cur, "arg_{}".format(i))
 				code += res
 				cleanup += clean
 			else:
 				# array
-				raise Exception("ARR")
-				code += "char* {} = (char*)malloc({});\n".format(x8664_args[i], (cur >> 8) + 1)
-				code += "{}[{}] = 0;\n".format(x8664_args[i], cur >> 8)
-				code += "fread({}, 1, {}, h);\n".format(x8664_args[i], cur >> 8)
-				cleanup += "\tfree({});\n".format(x8664_args[i])
+				array_length = 8
+				code += "char* {} = (char*)malloc({});\n".format(arg_names[-1], array_length + 1)
+				code += "{}[{}] = 0;\n".format(arg_names[-1], array_length)
+				code += "fread({}, 1, {}, h);\n".format(arg_names[-1], array_length)
+				cleanup += "free({});\n".format(arg_names[-1])
 	return code, cleanup, ", ".join(arg_names)

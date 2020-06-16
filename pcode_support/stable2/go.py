@@ -83,6 +83,7 @@ for i in range(len(argument_structs)):
 	args.append(Struct.Struct(0))
 for i in (important_stores + important_loads):
 	simplified = i.simplify()
+	print(i, simplified)
 	try:
 		substruct, offset, grand = simplified.create_struct(args, simplified.byte_length)
 		if i in pci.arrays:
@@ -92,16 +93,17 @@ for i in (important_stores + important_loads):
 	except ValueError as e:
 		print(e)
 
-struct_defs = args[0].pretty_print()
-print(struct_defs)
+struct_defs = ""
+
+for i in range(len(args)):
+	struct_defs += args[i].pretty_print()
 
 code, cleanup, arg_names = Struct.generate_struct_reader(args)
 print(struct_defs)
 print(code)
 print(cleanup)
 print(arg_names)
-print(hex(function_offset))
-print(program_path)
+raise Exception("END")
 
 harness = generate_linux_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
 harness2 = generate_windows_harness(struct_defs, program_path, function_offset + base_address, code, cleanup, arg_names)

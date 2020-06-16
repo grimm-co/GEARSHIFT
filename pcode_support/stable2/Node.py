@@ -23,9 +23,8 @@ class Node:
 			assert isinstance(self.left, Node)
 			sub_struct, offset, grand = self.left.create_struct(arg_struct_list, self.byte_length)
 			if isinstance(self.right, Node):
-				if not isinstance(self.right.operation, Varnode):
+				if not isinstance(self.right.operation, Varnode) or not self.right.operation.isConstant():
 					raise ValueError("Complex expression, skipping")
-				assert self.right.operation.isConstant()
 				if self.right.operation.getOffset() & (1 << (self.right.operation.getSize() * 8 - 1)) != 0:
 					raise ValueError("Negative constaints not supported yet")
 				offset += self.right.operation.getOffset()
@@ -111,23 +110,23 @@ class Node:
 
 	def simplify(self):
 		# TODO: better simplification in the future
-		if self.operation == "*" and (isinstance(self.left.operation, Varnode) and self.left.operation.isConstant()) and (isinstance(self.right.operation, Varnode) and self.right.operation.isConstant()) and self.left.operation.getSize() == self.right.operation.getSize():
-			print("Can simplify")
-			temp = self.left.operation
-			temp2 = self.right.operation
-			ret = Node(Varnode(temp.getAddress().getNewAddress(temp.getOffset() * temp2.getOffset()), temp.getSize()), None, None, temp.getSize())
-			return ret
-		elif self.operation == "+" and (isinstance(self.left.operation, Varnode) and self.left.operation.isConstant()) and (isinstance(self.right.operation, Varnode) and self.right.operation.isConstant()) and self.left.operation.getSize() == self.right.operation.getSize():
-			print("Can simplify")
-			temp = self.left.operation
-			temp2 = self.right.operation
-			ret = Node(Varnode(temp.getAddress().getNewAddress(temp.getOffset() + temp2.getOffset()), temp.getSize()), None, None, temp.getSize())
-			return ret
 		ret = self.shallow_copy()
 		if ret.left is not None:
 			ret.left = ret.left.simplify()
 		if ret.right is not None:
 			ret.right = ret.right.simplify()
+		if ret.operation == "*" and (isinstance(ret.left.operation, Varnode) and ret.left.operation.isConstant()) and (isinstance(ret.right.operation, Varnode) and ret.right.operation.isConstant()) and ret.left.operation.getSize() == ret.right.operation.getSize():
+			temp = ret.left.operation
+			temp2 = ret.right.operation
+			ret = Node(Varnode(temp.getAddress().getNewAddress(temp.getOffset() * temp2.getOffset()), temp.getSize()), None, None, temp.getSize())
+			return ret
+		elif ret.operation == "+" and (isinstance(ret.left.operation, Varnode) and ret.left.operation.isConstant()) and (isinstance(ret.right.operation, Varnode) and ret.right.operation.isConstant()) and ret.left.operation.getSize() == ret.right.operation.getSize():
+			temp = ret.left.operation
+			temp2 = ret.right.operation
+			ret = Node(Varnode(temp.getAddress().getNewAddress(temp.getOffset() + temp2.getOffset()), temp.getSize()), None, None, temp.getSize())
+			return ret
+		elif ret.operation == "RESIZE" and isinstance(ret.left.operation, Varnode) and ret.left.operation.isConstant():
+			return Node(Varnode(ret.left.operation.getAddress(), ret.byte_length), ret.left.left, ret.left.right, ret.byte_length)
 		return ret
 
 	def shallow_copy(self):
