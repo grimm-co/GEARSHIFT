@@ -15,6 +15,8 @@ class Struct:
 		return self.__str__()
 
 	def make_array(self):
+		print("Making array")
+		print(self.members)
 		self.is_array = True
 		stride = self.members[0][1]
 		for i in range(len(self.members)):
@@ -58,7 +60,7 @@ class Struct:
 			self.break_member(idx - 1)
 			self.insert(offset, member)
 			# self.merge_until(idx - 1, member)
-			raise Exception("Merging")
+			# raise Exception("Merging")
 			return
 
 		# combine
@@ -74,7 +76,7 @@ class Struct:
 			self.break_member(idx - 1)
 			self.insert(offset, member)
 			# self.merge_until(idx - 1, member)
-			raise Exception("Merging")
+			# raise Exception("Merging")
 			return
 		c = 0
 		idx = temp
@@ -86,7 +88,7 @@ class Struct:
 
 	def merge_until(self, idx, until):
 		total_length = 0
-		while self.members[idx][0] != until:
+		while idx < len(self.members) and self.members[idx][0] != until:
 			total_length += self.members[idx][1]
 			del self.members[idx]
 		self.members.insert(idx, (0, total_length))
@@ -115,8 +117,8 @@ class Struct:
 			# TODO: instead of breaking, we should truncate conflicting member instead
 			self.break_member(idx - 1)
 			ret = self.get(offset)
-			self.merge_until(idx - 1, ret)
-			raise Exception("Merging")
+			# self.merge_until(idx - 1, ret)
+			# raise Exception("Merging")
 			return ret
 		self.mark(offset, offset + self.members[idx][1])
 		return self.members[idx]
@@ -158,7 +160,7 @@ class Struct:
 			if isinstance(self.members[c][0], Struct):
 				length += ARCH_BITS / 8
 				if not self.members[c][0].is_array:
-					res += "S{}* entry_{};\n".format(struct_counter, entry_counter)
+					res += "{}* entry_{};\n".format(self.members[c][0].name, entry_counter)
 					res = self.members[c][0].pretty_print() + "\n" + res
 				else:
 					res += "uint{}_t* entry_{};\n".format(self.members[c][0].stride * 8, entry_counter)

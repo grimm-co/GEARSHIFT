@@ -51,6 +51,8 @@ class PCodeInterpreter:
 			self.int_rem(inputs, output)
 		elif opcode == PcodeOp.INT_RIGHT:
 			self.int_right(inputs, output)
+		elif opcode == PcodeOp.INT_SRIGHT:
+			self.int_sright(inputs, output)
 		elif opcode == PcodeOp.INT_LEFT:
 			self.int_left(inputs, output)
 		elif opcode == PcodeOp.INT_AND:
@@ -108,7 +110,9 @@ class PCodeInterpreter:
 		elif opcode == PcodeOp.INDIRECT:
 			self.indirect(inputs, output)
 		elif opcode == PcodeOp.RETURN:
-			pass
+			if len(inputs) >= 2:
+				print "RETURN"
+				print(self.lookup_node(inputs[1]))
 		elif opcode == PcodeOp.CBRANCH:
 			pass
 		else:
@@ -165,6 +169,14 @@ class PCodeInterpreter:
 		for i in self.lookup_node(a):
 			for j in self.lookup_node(b):
 				self.store_node(output, i.shr(j))
+
+	def int_sright(self, inputs, output):
+		assert len(inputs) == 2 and output is not None
+		a = inputs[0]
+		b = inputs[1]
+		for i in self.lookup_node(a):
+			for j in self.lookup_node(b):
+				self.store_node(output, i.sshr(j))
 
 	def int_left(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
@@ -303,7 +315,7 @@ class PCodeInterpreter:
 				if temp.byte_length != j.byte_length:
 					temp = temp.resize(j.byte_length)
 				self.stores.append(temp)
-				# print "STORE:", temp
+				# print "STORE:", inputs[0].getPCAddress(), temp, "VALUE", self.lookup_node(inputs[2])
 
 	def load(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
@@ -353,7 +365,7 @@ class PCodeInterpreter:
 		self.loop_variants.add(output)
 
 		# TODO: prune possibilities
-		print "Multiequal", possibilities
+		print "Multiequal", output.getPCAddress(), possibilities
 
 	def int_sext(self, inputs, output):
 		assert output is not None and len(inputs) == 1
@@ -402,6 +414,7 @@ class PCodeInterpreter:
 		pc_addr = pc_varnode.getAddress()
 		temp = FlatProgramAPI(currentProgram)
 		called_func = temp.getFunctionAt(pc_addr)
+		print("call:", inputs[0].getPCAddress())
 		# print("START CALL RECURSIVE FORWARD ANALYSIS")
 		# Note: the function analysis parameter's varnodes are DIFFERENT that the varnodes from our current state. Thus we replace the varnode -> Node map in the function with the calling parameters
 		checkFixParameters(called_func, inputs[1:])
@@ -415,26 +428,25 @@ class PCodeInterpreter:
 
 		stores, loads, parameter_node_objects, arrs = forward_cache[called_func]
 		input_node_objects = map(self.lookup_node, inputs[1:])
-		# TODO: modify for multi value
+		# TODO: copy array values from cache
 		for i in stores:
 			arg_idx = i.find_base_idx(parameter_node_objects, input_node_objects)
 			if arg_idx is not None:
 				node_objects = self.lookup_node(inputs[1:][arg_idx])
 				for j in node_objects:
 					self.stores.append(i.replace_base_parameters(parameter_node_objects, j))
+					if i in arrs:
+						self.arrays.append(self.stores[-1])
+						print("ARRAY RES", self.stores[-1])
 		for i in loads:
 			arg_idx = i.find_base_idx(parameter_node_objects, input_node_objects)
 			if arg_idx is not None:
 				node_objects = self.lookup_node(inputs[1:][arg_idx])
 				for j in node_objects:
 					self.loads.append(i.replace_base_parameters(parameter_node_objects, j))
-		for i in arrs:
-			arg_idx = i.find_base_idx(parameter_node_objects, input_node_objects)
-			if arg_idx is not None:
-				node_objects = self.lookup_node(inputs[1:][arg_idx])
-				for j in node_objects:
-					self.arrays.append(i.replace_base_parameters(parameter_node_objects, j))
-	
+					if i in arrs:
+						self.arrays.append(self.loads[-1])
+
 			# raise Exception("L")
 		#print(stores, loads)
 		# print("END CALL RECURSIVE FORWARD ANALYSIS")
@@ -486,8 +498,8 @@ class PCodeInterpreter:
 		if varnode in self.cycle_exec:
 			self.cycle_exec[varnode] += 1
 		if varnode in self.cycle_exec and self.cycle_exec[varnode] > 0:
-			print "CYCLE DETECTED", varnode
-			print "CYCLE OPERATION", self.instruction
+			# print "CYCLE DETECTED", varnode
+			# print "CYCLE OPERATION", self.instruction
 			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
 			if varnode not in self.nodes:
 				self.store_node(varnode, Node(("CYCLE", varnode), None, None, varnode.getSize()))
@@ -550,7 +562,8 @@ class PCodeInterpreter:
 	def store_node(self, varnode, nodeobj):
 		if varnode not in self.nodes:
 			self.nodes[varnode] = []
-		if (nodeobj.relevant() or len(self.nodes[varnode]) == 0) and hash(nodeobj) not in map(hash, self.nodes[varnode]):
+		if hash(nodeobj) not in map(hash, self.nodes[varnode]):
+		#if (nodeobj.relevant() or len(self.nodes[varnode]) == 0) and hash(nodeobj) not in map(hash, self.nodes[varnode]):
 			self.nodes[varnode].append(nodeobj)
 
 def get_highfunction(func):
@@ -666,8 +679,6 @@ def analyzeFunctionForward(func, pci):
 		new_nodes = {}
 
 		for i in pci.loop_variants:
-			print("VAR", i)
-			print(pci.nodes[i])
 			new_nodes[i] = pci.nodes[i]
 			del pci.nodes[i]
 		visited = set()

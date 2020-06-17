@@ -82,11 +82,13 @@ args = []
 for i in range(len(argument_structs)):
 	args.append(Struct.Struct(0))
 for i in (important_stores + important_loads):
-	simplified = i.simplify()
-	print(i, simplified)
+	simplified, c = i.simplify()
+	while c:
+		simplified, c = simplified.simplify()
+	# print(i, simplified)
 	try:
 		substruct, offset, grand = simplified.create_struct(args, simplified.byte_length)
-		if i in pci.arrays:
+		if i in pci.arrays and not grand[0].is_array:
 			grand[0].make_array()
 			print "Make array", i
 		# print(str(simplified))

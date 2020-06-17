@@ -74,7 +74,7 @@ class Node:
 		return ret
 
 	def relevant(self):
-		good = self.operation in ("+", "*()", "RESIZE", "*") or (self.is_leaf() and str(self.operation).startswith("ARG")) or (isinstance(self.operation, Varnode) and self.operation.isConstant())
+		good = self.operation in ("+", "*()", "RESIZE", "*") or (self.is_leaf() and str(self.operation).startswith("ARG")) or (isinstance(self.operation, Varnode) and self.operation.isConstant()) or self.is_varnode_constant()
 		if isinstance(self.left, Node):
 			good = good and self.left.relevant()
 		if isinstance(self.right, Node):
@@ -108,26 +108,32 @@ class Node:
 			ret.right = ret.right.replace_base_parameters(old_params, new_param)
 		return ret
 
+	def is_varnode_constant(self):
+		return isinstance(self.operation, Varnode) and self.operation.isConstant()
+
 	def simplify(self):
 		# TODO: better simplification in the future
+		changed = False
 		ret = self.shallow_copy()
 		if ret.left is not None:
-			ret.left = ret.left.simplify()
+			ret.left, c = ret.left.simplify()
+			changed |= c
 		if ret.right is not None:
-			ret.right = ret.right.simplify()
-		if ret.operation == "*" and (isinstance(ret.left.operation, Varnode) and ret.left.operation.isConstant()) and (isinstance(ret.right.operation, Varnode) and ret.right.operation.isConstant()) and ret.left.operation.getSize() == ret.right.operation.getSize():
+			ret.right, c = ret.right.simplify()
+			changed |= c
+		if ret.operation == "*" and (self.left.is_varnode_constant()) and (self.right.is_varnode_constant()) and ret.left.operation.getSize() == ret.right.operation.getSize():
 			temp = ret.left.operation
 			temp2 = ret.right.operation
 			ret = Node(Varnode(temp.getAddress().getNewAddress(temp.getOffset() * temp2.getOffset()), temp.getSize()), None, None, temp.getSize())
-			return ret
-		elif ret.operation == "+" and (isinstance(ret.left.operation, Varnode) and ret.left.operation.isConstant()) and (isinstance(ret.right.operation, Varnode) and ret.right.operation.isConstant()) and ret.left.operation.getSize() == ret.right.operation.getSize():
+			return ret, True
+		elif ret.operation == "+" and (self.left.is_varnode_constant()) and (self.right.is_varnode_constant()) and ret.left.operation.getSize() == ret.right.operation.getSize():
 			temp = ret.left.operation
 			temp2 = ret.right.operation
 			ret = Node(Varnode(temp.getAddress().getNewAddress(temp.getOffset() + temp2.getOffset()), temp.getSize()), None, None, temp.getSize())
-			return ret
-		elif ret.operation == "RESIZE" and isinstance(ret.left.operation, Varnode) and ret.left.operation.isConstant():
-			return Node(Varnode(ret.left.operation.getAddress(), ret.byte_length), ret.left.left, ret.left.right, ret.byte_length)
-		return ret
+			return ret, True
+		elif ret.operation == "RESIZE" and self.left.is_varnode_constant():
+			return Node(Varnode(ret.left.operation.getAddress(), ret.byte_length), ret.left.left, ret.left.right, ret.byte_length), True
+		return ret, changed
 
 	def shallow_copy(self):
 		ret = Node(self.operation, self.left, self.right, self.byte_length)
@@ -198,5 +204,10 @@ class Node:
 
 	def mod(self, other):
 		return Node("%", self, other, self.byte_length)
+
+	def sshr(self, other):
+		return Node("s>>", self, other, self.byte_length)
+
+
 
 
