@@ -47,7 +47,7 @@ To give an idea of what P-Code looks like, here are a few examples of instructio
 
 ![](pcode_example_2.png)
 
-We can see that with the basic set of instructions defined by P-Code specifications, all of the instructions from various architectures can be modeled.
+With the basic set of instructions defined by P-Code specifications, all of the instructions from various architectures can be modeled.
 
 ### Data Dependency
 
@@ -220,6 +220,14 @@ void test(uint32_t* arg0, uint32_t* arg1) {
 Because we are traversing in DFS manner from only the function parameters, we may require nodes that have not yet been encountered. To solve this, we must perform backwards DFS from the node that isn't defined, which we need to be defined. This is the `get_node_definition` function under `PCodeInterpreter`. This function recursively traverses the parent of each node until a full definition can be defined.
 
 You also might wonder why (2) happens. Let's go back to a previous example:
+
+```c
+int x = 0;
+x = x + 3;
+while (x < 1337) {
+	x++;
+}
+```
 
 ```c
 push    rbp
