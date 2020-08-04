@@ -25,6 +25,7 @@ PCodeInterpreter.ARCH_BITS = ARCH_BITS
 Node.ARCH_BITS = ARCH_BITS
 Struct.ARCH_BITS = ARCH_BITS
 Struct.struct_counter = 0
+Struct.currentProgram = currentProgram
 
 """
 NOTES on interprocedural analysis
@@ -76,7 +77,6 @@ for i in pci.loads:
 		# print(i)
 
 print("Start creating struct")
-print(pci.arrays)
 
 args = []
 for i in range(len(argument_structs)):
@@ -90,12 +90,20 @@ for i in (important_stores + important_loads):
 		substruct, offset, grand = simplified.create_struct(args, simplified.byte_length)
 		if i in pci.arrays and not grand[0].is_array:
 			grand[0].make_array()
-			print "Make array", i
 		# print(str(simplified))
 	except ValueError as e:
 		print(e)
 
 struct_defs = ""
+
+orig_params = currentFunction.getParameters()
+assert len(orig_params) == len(args)
+for i in range(len(args)):
+	print(args[i].pretty_print())
+	dt = args[i].get_dtype()
+	print(dt)
+	orig_params[i].setDataType(dt, SourceType.USER_DEFINED)
+raise Exception("END")
 
 for i in range(len(args)):
 	struct_defs += args[i].pretty_print()
@@ -105,7 +113,6 @@ print(struct_defs)
 print(code)
 print(cleanup)
 print(arg_names)
-raise Exception("END")
 
 harness = generate_linux_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
 harness2 = generate_windows_harness(struct_defs, program_path, function_offset + base_address, code, cleanup, arg_names)

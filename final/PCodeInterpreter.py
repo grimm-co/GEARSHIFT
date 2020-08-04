@@ -8,7 +8,8 @@ from ghidra.program.model.symbol import SourceType
 from ghidra.program.model.data import Undefined
 from ghidra.app.cmd.function import ApplyFunctionSignatureCmd
 
-NODE_LIMIT = 10
+NODE_LIMIT = 1
+log = False
 
 forward_cache = {}
 backward_cache = {}
@@ -315,7 +316,10 @@ class PCodeInterpreter:
 				if temp.byte_length != j.byte_length:
 					temp = temp.resize(j.byte_length)
 				self.stores.append(temp)
-				# print "STORE:", inputs[0].getPCAddress(), temp, "VALUE", self.lookup_node(inputs[2])
+				if log:
+					print "[*]", "STORE:", inputs[0].getPCAddress(), temp
+					print "VALUE", self.lookup_node(inputs[2])
+					print ""
 
 	def load(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
@@ -365,7 +369,7 @@ class PCodeInterpreter:
 		self.loop_variants.add(output)
 
 		# TODO: prune possibilities
-		print "Multiequal", output.getPCAddress(), possibilities
+		# print "Multiequal", output.getPCAddress(), possibilities
 
 	def int_sext(self, inputs, output):
 		assert output is not None and len(inputs) == 1
@@ -419,12 +423,14 @@ class PCodeInterpreter:
 		# Note: the function analysis parameter's varnodes are DIFFERENT that the varnodes from our current state. Thus we replace the varnode -> Node map in the function with the calling parameters
 		checkFixParameters(called_func, inputs[1:])
 		if called_func not in forward_cache:
+			global log
 			pci_new = PCodeInterpreter()
 			parameter_varnodes = analyzeFunctionForward(called_func, pci_new)
 			parameter_nodes = []
 			for i in parameter_varnodes:
 				parameter_nodes.append(pci_new.lookup_node(i)[0])
 			forward_cache[called_func] = (pci_new.stores, pci_new.loads, parameter_nodes, pci_new.arrays)
+			log = False
 
 		stores, loads, parameter_node_objects, arrs = forward_cache[called_func]
 		input_node_objects = map(self.lookup_node, inputs[1:])
@@ -437,7 +443,6 @@ class PCodeInterpreter:
 					self.stores.append(i.replace_base_parameters(parameter_node_objects, j))
 					if i in arrs:
 						self.arrays.append(self.stores[-1])
-						print("ARRAY RES", self.stores[-1])
 		for i in loads:
 			arg_idx = i.find_base_idx(parameter_node_objects, input_node_objects)
 			if arg_idx is not None:
@@ -456,6 +461,7 @@ class PCodeInterpreter:
 				# print("START CALL RECURSIVE BACKWARDS ANALYSIS")
 
 				#TODO: cache function analysis types
+				print("Test fix", output.getPCAddress())
 				checkFixReturn(called_func, output)
 				pci_new = PCodeInterpreter()
 				ret_type, subfunc_parameter_varnodes = analyzeFunctionBackward(called_func, pci_new)
@@ -580,11 +586,13 @@ def checkFixParameters(func, parameters):
 	hf = get_highfunction(func)
 	# Check arguments
 	func_proto = hf.getFunctionPrototype()
+	print("NO PARAM", len(parameters))
 	if func_proto.getNumParams() < len(parameters):
 		print func, "call signature wrong, fixing..."
 		HighFunctionDBUtil().commitParamsToDatabase(hf, True, SourceType.USER_DEFINED)
 		if func_proto.getNumParams() != len(parameters):
 			print func, "fix did not work..."
+			return
 			raise Exception("Function call signature different")
 		else:
 			raise Exception("Good, fix worked!")
@@ -607,11 +615,11 @@ def checkFixReturn(func, ret_varnode):
 	for i in hf.getPcodeOps():
 		if i.getOpcode() == PcodeOp.RETURN:
 			if len(i.getInputs()) < 2:
-				print func, "has no return value, fixing type..."
+				print func, "has no return value, fixing type...", i.getInputs()[0].getPCAddress()
 				sig = func.getSignature()
 				sig.setReturnType(Undefined.getUndefinedDataType(ret_varnode.getSize()))
 				ApplyFunctionSignatureCmd(func.getEntryPoint(), sig, SourceType.USER_DEFINED).applyTo(currentProgram)
-				checkFixReturn(func, ret_varnode)
+				#checkFixReturn(func, ret_varnode)
 
 # This function performs backwards analysis on the function return type with base case of function parameters
 # init_param replaces the parameters of the current func to be analyzed in terms the passed parameter expressions
@@ -619,14 +627,15 @@ def analyzeFunctionBackward(func, pci, init_param=None):
 	print "Backwards analysis", func.getName()
 
 	hf = get_highfunction(func)
+	HighFunctionDBUtil.commitParamsToDatabase(hf, True, SourceType.DEFAULT)
 
 	func_proto = hf.getFunctionPrototype()
 	# Grab return varnodes
 	return_varnodes = []
 	for i in hf.getPcodeOps():
 		if i.getOpcode() == PcodeOp.RETURN:
-			assert len(i.getInputs()) >= 2
-			return_varnodes.append(i.getInputs()[1])
+			if len(i.getInputs()) >= 2:
+				return_varnodes.append(i.getInputs()[1])
 
 	# Grab argument varnodes as base case
 	argument_varnodes = []
@@ -661,6 +670,7 @@ def traverseForward(cur, depth, pci, visited):
 def analyzeFunctionForward(func, pci):
 	print "Forwards analysis", func.getName()
 	hf = get_highfunction(func)
+	HighFunctionDBUtil.commitParamsToDatabase(hf, True, SourceType.DEFAULT)
 
 	# get the varnode of function parameters
 	func_proto = hf.getFunctionPrototype()
@@ -703,5 +713,6 @@ def analyzeFunctionForward(func, pci):
 		for i in range(len(temp))[::-1]:
 			if hash(temp[i]) not in hash_list:
 				pci.arrays.append(temp[i])
+				print("FOUND ARRAY!")
 
 	return argument_varnodes

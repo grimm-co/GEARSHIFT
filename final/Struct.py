@@ -1,3 +1,5 @@
+from ghidra.program.model.data import StructureDataType, CategoryPath, DataTypeConflictHandler, PointerDataType, BuiltInDataTypeManager, ArrayDataType
+
 class Struct:
 	def __init__(self, size):
 		self.size = size # Total size of the struct
@@ -7,6 +9,43 @@ class Struct:
 		global struct_counter
 		self.name = "S{}".format(struct_counter)
 		struct_counter += 1
+		self.dtype = None
+
+	def get_dtype(self):
+		if self.dtype is not None:
+			return self.dtype
+		dm = currentProgram.getDataTypeManager()
+		bdm = BuiltInDataTypeManager.getDataTypeManager()
+		new_struct = StructureDataType(CategoryPath("/struct"), self.name, self.size)
+		size_lookup = {}
+		size_lookup[1] = bdm.getDataType("/char")
+		size_lookup[2] = bdm.getDataType("/short")
+		size_lookup[4] = bdm.getDataType("/int")
+		size_lookup[8] = bdm.getDataType("/longlong")
+		off = 0
+		for i in range(len(self.members)):
+			t, size = self.members[i][0], self.members[i][1]
+			comment = ""
+			if len(self.members[i]) > 2 and self.members[i][2] == False:
+				comment = "NOT ACCESSED"
+			if isinstance(t, Struct):
+				if not t.is_array:
+					sub_struct_dtype = t.get_dtype()
+					new_struct.replaceAtOffset(off, sub_struct_dtype, ARCH_BITS / 8, "entry_{}".format(i), comment)
+				else:
+					arr_dtype = bdm.getPointer(size_lookup[1], ARCH_BITS / 8)
+					new_struct.replaceAtOffset(off, arr_dtype, ARCH_BITS / 8, "entry_{}".format(i), comment)
+			else:
+				if size not in size_lookup:
+					arr_dtype = ArrayDataType(size_lookup[1], size, 1)
+					new_struct.replaceAtOffset(off, arr_dtype, size, "entry_{}".format(i), comment)
+				else:
+					new_struct.replaceAtOffset(off, size_lookup[size], size, "entry_{}".format(i), comment)
+			off += size
+		print("DONE CREATING STRUCT", self.name)
+		dm.addDataType(new_struct, DataTypeConflictHandler.REPLACE_HANDLER)
+		self.dtype = dm.getPointer(new_struct, ARCH_BITS / 8)
+		return self.dtype
 
 	def __str__(self):
 		return str(self.members)
@@ -19,9 +58,9 @@ class Struct:
 		print(self.members)
 		self.is_array = True
 		stride = self.members[0][1]
-		for i in range(len(self.members)):
-			if self.members[i][1] != stride:
-				raise Exception("Array stride different")
+		#for i in range(len(self.members)):
+			#if self.members[i][1] != stride:
+				#raise Exception("Array stride different")
 		self.stride = stride
 
 	# Consolidates struct members of size 1 into a char array
@@ -167,7 +206,7 @@ class Struct:
 			else:
 				res += self.get_field(self.members[c][1], entry_counter) + "\n"
 				if len(self.members[c]) > 2:
-					res = res[:-1] + " NOT ACCESSED\n"
+					res = res[:-1] + " //NOT ACCESSED\n"
 				length += self.members[c][1]
 		return res + "}"
 
