@@ -11,9 +11,9 @@ Over the course of my internship, I worked on projects that mainly involve binar
 
 ## Background
 
-Ghidra is a binary reverse engineering tool developed by the NSA. Binary reverse engineering is the process of understanding the behavior of compiled binary code. To aid reverse engineers, Ghidra is a disassembler and decompiler that is able to recover high level C-like representation pseudocode from assembly, allowing reverse engineers to understand code much more easily. Ghidra also supports decompilation for over 16 architectures, which is an edge for Ghidra compared to its main competitor, IDA Pro Hex-Rays.
+Ghidra is a binary reverse engineering tool developed by the National Security Agency (NSA). Binary reverse engineering is the process of understanding the behavior of compiled binary code. To aid reverse engineers, Ghidra is a disassembler and decompiler that is able to recover high level C-like representation pseudocode from assembly, allowing reverse engineers to understand code much more easily. Ghidra also supports decompilation for over 16 architectures, which is an edge for Ghidra compared to its main competitor, IDA Pro Hex-Rays. A few examples of these architectures are: x86, x86-64, MIPS, and ARM.
 
-One great feature about Ghidra is its [API](https://ghidra.re/ghidra_docs/api/index.html). Almost everything Ghidra does in the backend is accessible through Ghidra's API. Additionally, the documentation is well done, and allowed me, who has never used Ghidra before, to easily understand the functions available through the API.
+One great feature about Ghidra is its [API](https://ghidra.re/ghidra_docs/api/index.html). Almost everything Ghidra does in the backend is accessible through Ghidra's API. Additionally, the documentation is well done, and allowed me to easily understand the functions available through the API.
 
 ## Techniques
 
@@ -43,72 +43,55 @@ Ghidra's intermediate language is called P-Code. Every single instruction in P-C
 
 To give an idea of what P-Code looks like, here are a few examples of instructions from different architectures and their respective P-Code representation.
 
+x86 `add` instruction:
+
 ![](pcode_example_1.png)
+
+MIPS `addiu` instruction:
 
 ![](pcode_example_2.png)
 
-With the basic set of instructions defined by P-Code specifications, all of the instructions from various architectures can be modeled.
+With the basic set of instructions defined by P-Code specifications, all of the instructions from various architectures can be accurately modeled.
 
 ### Data Dependency
 
-Data dependency is a useful abstract idea for representing code. The idea is that each instruction changes some sort of state in the program, whether it is a register, or some stack variable. This changed state may then be used elsewhere in the program, often times the next few instructions. We say that whenever the state affected by instruction A is used by another state B that is affected by some instruction, then B depends on A. Thus, there is a directed edge from A to B. The combination of all such dependencies in a program is the data dependency graph. Let's see an example:
+Data dependency is a useful abstract idea for representing code. The idea is that each instruction changes some sort of state in the program, whether it is a register, or some stack variable. This changed state may then be used elsewhere in the program, often times the next few instructions. We say that whenever the state affected by instruction A is used by another state B that is affected by some instruction, then B depends on A. Thus, there is a directed edge from A to B. The combination of all such dependencies in a program is the data dependency graph.
 
-Say we have the following pseudocode
-
-```c
-int var1;
-int var2;
-int var3;
-int counter;
-
-counter = 0;
-while (counter < 10) {
-	var1 = counter * 2;
-	var2 = counter / 2;
-	var3 = var1 + var2;
-	counter++;
-}
-```
-
-The data dependency graph for this on a high level would look like:
-
-![](dd1.png)
-
-However, analysis is not performed on high level code, but rather assembly code.
-
-Obtaining the data dependency graph of the assembly representation is a lot more complicated. Since each architecture has different register models. First, we have to understand how Ghidra does data dependency.
+Obtaining the data dependency graph of the assembly representation is more complicated since each architecture has different register models. First, we have to understand how Ghidra does data dependency.
 
 Ghidra's implementation of a data dependency graph uses P-Code representation. Ghidra represents each "state" (register, variable, or memory), as a node in the graph and is called [Varnode](https://ghidra.re/ghidra_docs/api/ghidra/program/model/pcode/Varnode.html). The children of a node can be fetched with `getDescendants()`, and the parent of a node with `getDef()`. You might be wondering why the parent is singular - that is why does each node only ever have one parent. It makes sense that multiple values may affect another value. However this is because Ghidra uses [SSA](https://en.wikipedia.org/wiki/Static_single_assignment_form) (single static assignment) form.
 
 SSA representation is a well studied idea in compiler theory. This is best demonstrated through an example. Let's use the following example:
 
 ```c
-int x = 0;
-x = x + 3;
-while (x < 1337) {
-	x++;
+int x = 0; // x1
+x = x + 3; // x2
+while (x < 1337) { // x4
+	x++; // x3
 }
 ```
 
-There are a few things to note in this example. First, take a look at lines 1 and 2. Intuitively we may think that it is reasonable for x to only be a single variable here that gets assigned values twice. However, SSA requires each variable to be assigned a value once. Therefore, according to SSA, we create different "versions" of x each time it gets assigned a new value. In Ghidra terminology, there would be two `Varnodes` on lines 1 and 2.
+There are a few things to note here. First, take a look at lines 1 and 2. Intuitively we may think that it is reasonable for x to only be a single node here that gets assigned values twice. However, SSA requires each node to be assigned a value once. Therefore, according to SSA, we create different "versions" of x each time it gets assigned a new value. Hence the comments denoting different x's. In Ghidra terminology, there would be two `Varnodes` on lines 1 and 2.
 
-The second thing to note is on line 3. Say we are looking at the loop condition `x < 1337`. Which Varnode is the x here derived from? There are actually two Varnode possibilities in this case - the `x` on line `2` and the `x` on line `4`. Both of these nodes are the parent of the `x` in the loop condition. In this case, SSA defines what is called a `phi node`, which represents the merging of multiple nodes. Ghidra defines this as a `multiequal` instruction, whose definition can be found [here](https://ghidra.re/courses/languages/html/additionalpcode.html). So, the assembly and respective SSA data dependency graph of the example above would look like:
+The second thing to note is on line 3. Say we are looking at the loop condition `x < 1337`. Which Varnode is the x here derived from? There are actually two Varnode possibilities in this case - the `x` on line `2` and the `x` on line `4`. Both of these nodes are the parent of the `x` in the loop condition. In this case, SSA defines what is called a `phi node`, which represents the merging of multiple nodes. Ghidra defines this as a `multiequal` instruction, whose definition can be found [here](https://ghidra.re/courses/languages/html/additionalpcode.html). The x86-64 assembly of this example is shown below, with comments representing different "versions" of x.
 
 ```c
 push    rbp
 mov     rbp, rsp
-mov     [rbp+x], 0
-add     [rbp+x], 3
+mov     [rbp+x], 0 // x1
+add     [rbp+x], 3 // x2
 jmp     condition
 loop:
-add     [rbp+x], 1
+add     [rbp+x], 1 // x3
 condition:
-cmp     [rbp+x], 538h
+cmp     [rbp+x], 538h // x4
 jle     loop
 mov     eax, 0
 pop     rbp
 retn
 ```
+
+The respective data dependency graph would look like:
 
 ![](dd2.png)
 
@@ -162,7 +145,7 @@ def int_add(self, inputs, output):
 
 The implementation of most P-Code opcodes are simple to understand. In the `INT_ADD` case, there are two parameters, and parameter one is usually a `Varnode`, and parameter two might be a constant or `Varnode` added to parameter one. Most of the P-Code opcodes are implemented in a similar manner. You may wonder why the code loops through `a` and `b`. This is because there can be multiple paths in the code due to phi-nodes. Thus, each possibility and combination must be considered as a possible value a `Varnode` holds.
 
-However there are a few functions that require heavy consideration: `lookup_node`, `store_node`, and the `CALL` opcode. First, let's take at `store_node`:
+However there are a few functions that require heavy consideration: `lookup_node`, `store_node`, and the `CALL` opcode. First, let's take a look at `store_node`:
 
 ```python
 def store_node(self, varnode, nodeobj):
@@ -217,28 +200,20 @@ void test(uint32_t* arg0, uint32_t* arg1) {
 
 ![](undefined.png)
 
-Because we are traversing in DFS manner from only the function parameters, we may require nodes that have not yet been encountered. To solve this, we must perform backwards DFS from the node that isn't defined, which we need to be defined. This is the `get_node_definition` function under `PCodeInterpreter`. This function recursively traverses the parent of each node until a full definition can be defined.
+Because we are traversing in DFS manner from only the function parameters, we may require nodes that have not yet been encountered. In this case, we are finding the definition of temp3 which depends on temp2, yet temp2 is not yet defined, since DFS has not reached that node. To solve this, we must perform backwards traverse from the node that isn't defined, which we need to be defined. This is the `get_node_definition` function under `PCodeInterpreter`. This function recursively traverses the parent of each node until a full definition can be defined, with function arguments as the base case.
 
 You also might wonder why (2) happens. Let's go back to a previous example:
 
 ```c
-int x = 0;
-x = x + 3;
-while (x < 1337) {
-	x++;
-}
-```
-
-```c
 push    rbp
 mov     rbp, rsp
-mov     [rbp+x], 0
-add     [rbp+x], 3
+mov     [rbp+x], 0 // x1
+add     [rbp+x], 3 // x2
 jmp     condition
 loop:
-add     [rbp+x], 1
+add     [rbp+x], 1 // x3
 condition:
-cmp     [rbp+x], 538h
+cmp     [rbp+x], 538h // x4
 jle     loop
 mov     eax, 0
 pop     rbp
@@ -247,7 +222,7 @@ retn
 
 ![](dd2.png)
 
-When we encounter the phi-node, usually we want to get the definitions for all the inputs, so that we retain all the possible paths moving forward. However, when we try to resolve the `x` value from line 7 during line 9, we traverse its dependency graph and find that we end up in a loop. The value of x from line 7 depends on one of the values on line 9. However, we are trying to resolve the value on line 9, which depends on the value from line 7. This is what the `self.cycle_exec` dictionary and `Node(("CYCLE", varnode), None, None, varnode.getSize())` represents. This is an important idea used for array identification, which will be explained later.
+When we encounter the phi-node, usually we want to get the definitions for all the inputs, so that we retain all the possible paths moving forward. However, when we try to resolve `x4` we must resolve the phi-node, whose inputs include x3. We traverse `x3`'s dependency graph, we find that we end up in a loop. `x3` depends on the phi-node, and the phi-node depends on `x3`. This is what the `self.cycle_exec` dictionary and `Node(("CYCLE", varnode), None, None, varnode.getSize())` represents. It both terminates the cycle, and identifies the cycles. This is an important idea used for array identification, which will be explained later.
 
 Next, let's consider the `CALL` opcode. Interprocedural analysis is extremely important, because one of the members of the struct (from the function parameter we are analyzing) may be passed into another function. Then, in the other function, many stores and loads may be performed on that. We need to retain and capture that information. For example:
 
@@ -322,14 +297,13 @@ Now here is the last issue: how do we know whether a struct dereference is a str
 
 The solution I came up with, which may not be the best, is to use the idea of loop variants. Intuitively, we know that if we have an array, then we will be looping over the array at some point in the function. Thus, there must exist a loop - and when there is a loop, there are phi-nodes. The counter to this loop must be one of the nodes at a `MULTIEQUAL` instruction. These varnodes are loop variants. So, if we run forwards analysis twice, however on the second run, we define initial conditions for each loop variant varnodes encountered, then the values added during the second run would be the second iteration of the loop. If there exists an array, then on the second iteration, there would be extra `STORE` expressions that was not seen on the first analysis run.
 
+Finally, using Ghidra's API, we can automatically define these inferred structs in Ghidra's DataTypeManager and retype the function parameters.
+
 ## Results
 
-From the following example code compiled with gcc on an x86-64 architecture:
+The following is a custom-made toy program with the following structs:
 
 ```c
-#include <stdio.h>
-#include <stdlib.h>
-
 typedef struct {
 	char haha;
 	int L;
@@ -349,60 +323,88 @@ typedef struct {
   int return_value;
   dec* buf;
 } hack;
+```
 
-int atoi32(hack*);
+The Ghidra decompilation of one of the functions before running the plugin is:
 
-int main() {
-  printf("Case 1 - Atoi\n");
-  char buf[64];
-  int len = read(0, buf, 64);
-  if (buf[len-1] == '\n') {
-    buf[len-1] = '\x00';
-  } else {
-    buf[len] = '\x00';
+```c
+
+ulong atoi32(undefined4 *param_1)
+
+{
+  int local_1c;
+  char *local_18;
+  
+  param_1[1] = 0;
+  local_18 = **(char ***)(param_1 + 2);
+  *(undefined4 *)(*(long *)(*(long *)(param_1 + 2) + 0x10) + 4) = 1;
+  *(undefined4 *)(*(long *)(*(long *)(param_1 + 2) + 0x10) + 8) = 2;
+  *(undefined4 *)(*(long *)(*(long *)(param_1 + 2) + 0x10) + 0xc) = 3;
+  **(undefined **)(*(long *)(param_1 + 2) + 0x10) = 0x41;
+  *(undefined4 *)(*(long *)(*(long *)(param_1 + 2) + 0x18) + 4) = 4;
+  *(undefined4 *)(*(long *)(*(long *)(param_1 + 2) + 0x18) + 8) = 5;
+  *(undefined4 *)(*(long *)(*(long *)(param_1 + 2) + 0x18) + 0xc) = 6;
+  **(undefined **)(*(long *)(param_1 + 2) + 0x18) = 0x42;
+  local_1c = 0;
+  while( true ) {
+    if (*(int *)(*(long *)(param_1 + 2) + 8) <= local_1c) {
+      *param_1 = 0;
+      if ((int)param_1[1] < 1) {
+        uRam0000000000000000 = 1;
+      }
+      return (ulong)(uint)param_1[1];
+    }
+    if ((*local_18 < '0') || ('9' < *local_18)) break;
+    param_1[1] = param_1[1] * 10 + (int)*local_18 + -0x30;
+    local_18 = local_18 + 1;
+    local_1c = local_1c + 1;
   }
-
-  hack* test = (hack*) malloc(sizeof(hack));
-  test->return_code = 0;
-  test->return_value = 0;
-  test->buf = (dec*) malloc(sizeof(dec));
-  test->buf->buf = buf;
-  test->buf->length = len - 1;
-
-  atoi32(test);
-  printf("Res: %d\n", test->return_value);
+  *param_1 = 0xffffffff;
+  return 0xffffffff;
 }
 
-int atoi32(hack* test) {
-  test->return_value = 0;
-  char* ptr = test->buf->buf;
-	test->buf->lol->L = 1;
-	test->buf->lol->L2 = 2;
-	test->buf->lol->L3 = 3;
-	test->buf->lol->haha = 'A';
-	test->buf->lol2->L = 4;
-	test->buf->lol2->L2 = 5;
-	test->buf->lol2->L3 = 6;
-	test->buf->lol2->haha = 'B';
-  for (int i = 0; i < test->buf->length; i++) {
-    if (*ptr >= '0' && *ptr <= '9') {
-      test->return_value = test->return_value * 10 + (*ptr - '0');
-    } else {
-      test->return_code = -1;
-      return -1;
+
+```
+
+After running the plugin:
+
+```c
+ulong atoi32(S0 *param_1)
+
+{
+  int local_1c;
+  S4 *local_18;
+  
+  param_1->entry_1 = 0;
+  local_18 = param_1->entry_2->entry_0;
+  param_1->entry_2->entry_3->entry_2 = 1;
+  param_1->entry_2->entry_3->entry_3 = 2;
+  param_1->entry_2->entry_3->entry_4 = 3;
+  param_1->entry_2->entry_3->entry_0 = 'A';
+  param_1->entry_2->entry_4->entry_2 = 4;
+  param_1->entry_2->entry_4->entry_3 = 5;
+  param_1->entry_2->entry_4->entry_4 = 6;
+  param_1->entry_2->entry_4->entry_0 = 'B';
+  local_1c = 0;
+  while( true ) {
+    if (param_1->entry_2->entry_1 <= local_1c) {
+      param_1->entry_0 = 0;
+      if (param_1->entry_1 < 1) {
+        uRam0000000000000000 = 1;
+      }
+      return (ulong)(uint)param_1->entry_1;
     }
-    ptr++;
+    if ((local_18->entry_0 < '0') || ('9' < local_18->entry_0)) break;
+    param_1->entry_1 = param_1->entry_1 * 10 + (int)local_18->entry_0 + -0x30;
+    local_18 = local_18 + 1;
+    local_1c = local_1c + 1;
   }
-  test->return_code = 0;
-	if (test->return_value <= 0) {
-		int* a = 0;
-		*(a) = 1;
-	}
-	return test->return_value;
+  param_1->entry_0 = -1;
+  return 0xffffffff;
 }
 ```
 
-Forwards analysis was performed on `atoi32`, and the recovered structs are:
+The recovered structs are:
 
 ```c
 struct S3 {
@@ -433,7 +435,7 @@ struct S0 {
 }
 ```
 
-Incredibly accurate results. However, this is a custom test case, which may not be very convincing. Let's try this on something more practical. During the Hack-A-Sat CTF 2020, I worked on a completely stripped MIPS firmware reversing+pwn challenge, which involved a large number of complex structs. The writeup for that task can be found [here](https://voido.cc/2020/06/01/Hack-A-Sat-CTF-2020-Launch-Link/). This was actually a little endian MIPS binary, which is a great test case to demonstrate the flexibility of this code to work with all architectures. Through many hours of manual reverse engineering, one of the structs I ended up with is:
+Incredibly accurate results. However, this is a custom test case, which may not be very convincing. Let's try this on something more practical. During the Hack-A-Sat CTF 2020, I worked on a completely stripped MIPS firmware reversing+pwn challenge, which involved a large number of complex structs. The writeup for that task can be found [here](https://voido.cc/2020/06/01/Hack-A-Sat-CTF-2020-Launch-Link/). This was a little endian MIPS binary, which is a great test case to demonstrate the flexibility of this code to work with all architectures. Through many hours of manual reverse engineering, one of the structs I ended up with is:
 
 ```c
 struct mac_struct {
@@ -493,13 +495,13 @@ struct S0 {
 }
 ```
 
-Incredible results! The struct size is entirely the same, and the auto-generated struct is actually more accurate than the one I ended up with through manual reverse engineering.
+Amazing results! The struct size is entirely the same, and the auto-generated struct is actually more accurate than the one I ended up with through manual reverse engineering.
 
 ## Future Work
 
 One of the issues I encountered is that while performing analysis on a function, all of the call signatures for the functions must be accurate in order for the parameters in Ghidra's P-Code analysis to be consistent with the function signatures. This can most likely be automated through Ghidra's API, as it allows re-typing function signatures (what can't Ghidra API do!?!).
 
-Another issue that remains is that sometimes arrays identification may still be inaccurate at times - however further testing will be required.
+Another issue that remains is that sometimes arrays identification may still be inaccurate at times - however further testing will be required. One of these issues include identifying array buffers as a struct member by itself, as opposed to simply identifying array pointers.
 
 One big issue that is not easily solvable is when there are duplicate structs. Currently, two different structs will be defined even if the same struct is used in multiple places. A "hack" to fix this would be to inspect the final structs created, and if any of the struct's signatures completely match, then mark those as duplicates. However, this may result in false positives.
 
