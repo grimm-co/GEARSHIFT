@@ -15,8 +15,6 @@ Symbolic engines will allow for input bounding on arguments to the specified add
 
 ### Open source projects used:
 
-- https://github.com/penhoi/ghidra-decompiler/wiki/Symbolic-Value-Set-Analysis
-
 ## References of interest:
 
 - http://conferences.sigcomm.org/sigcomm/2010/papers/apsys/p13.pdf
