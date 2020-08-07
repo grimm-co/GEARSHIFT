@@ -10,6 +10,7 @@ class Struct:
 		self.name = "S{}".format(struct_counter)
 		struct_counter += 1
 		self.dtype = None
+		self.pretty = None
 
 	def get_dtype(self):
 		if self.dtype is not None:
@@ -162,6 +163,17 @@ class Struct:
 		self.mark(offset, offset + self.members[idx][1])
 		return self.members[idx]
 
+	# Only fetches member at given offset
+	def get2(self, offset):
+		c = 0
+		idx = 0
+		while c < offset:
+			c += self.members[idx][1]
+			idx += 1
+		if c != offset:
+			return -1
+		return self.members[idx][0]
+
 	# Extends the size of the struct
 	def extend(self, length):
 		while self.size < length:
@@ -178,6 +190,8 @@ class Struct:
 			return "char entry_{}[{}];".format(entry_num, length)
 
 	def pretty_print(self):
+		if self.pretty is not None:
+			return self.pretty
 		self.consolidate()
 
 		# first, we detect if it's size 0, or only has one member
@@ -208,7 +222,8 @@ class Struct:
 				if len(self.members[c]) > 2:
 					res = res[:-1] + " //NOT ACCESSED\n"
 				length += self.members[c][1]
-		return res + "}"
+		self.pretty = res + "}"
+		return self.pretty
 
 def do_read(struct, current_reference):
 	ret = ""

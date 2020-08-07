@@ -10,9 +10,25 @@ class Node:
 		self.operation = operation
 		self.byte_length = byte_length
 
+	def traverse_struct(self, struct):
+		if self.is_leaf() and str(self.operation).startswith("ARG"):
+			return struct, 0
+		elif self.operation == "+":
+			assert isinstance(self.left, Node)
+			res, off = self.left.traverse_struct(struct)
+			return res, off + self.right.operation.getOffset()
+		elif self.operation == "*()":
+			assert isinstance(self.left, Node)
+			res, off = self.left.traverse_struct(struct)
+			return res.get2(off), 0
+		elif self.operation == "RESIZE":
+			return self.left.traverse_struct(struct)
+		else:
+			print("Not yet supported", self.operation)
+			raise ValueError("Not yet supported")
+
 	# (Object reference, reference offset, (Grandparent struct, grandparent offset))
 	# Creates the struct specified in arg_struct_list
-	# TODO: mark struct members as defined and undefined
 	# The intuition is that when we encounter a pointer, we also hold a pointer to that pointer (grandparent). Therefore if a pointer is dereferenced and that pointer is not yet marked a struct, then we use grandparent to change it into a struct
 	# Otherwise, we just keep track of the current offsets into the current struct and recursive base case is the argument struct.
 	def create_struct(self, arg_struct_list, parent_byte_length):
@@ -86,15 +102,25 @@ class Node:
 			return False
 		return self in nodes or (isinstance(self.left, Node) and self.left.contains(nodes)) or (isinstance(self.right, Node) and self.right.contains(nodes))
 
-	def find_base_idx(self, old_params, new_params):
+	def find_base_idx2(self):
+		if self.is_leaf() and str(self.operation).startswith("ARG"):
+			return int(str(self.operation).split("ARG")[1])
+		res = None
+		if isinstance(self.left, Node) and res is None:
+			res = self.left.find_base_idx2()
+		if isinstance(self.right, Node) and res is None:
+			res = self.right.find_base_idx2()
+		return res
+
+	def find_base_idx(self, old_params):
 		if self in old_params:
 			idx = old_params.index(self)
 			return idx
 		res = None
 		if isinstance(self.left, Node) and res is None:
-			res = self.left.find_base_idx(old_params, new_params)
+			res = self.left.find_base_idx(old_params)
 		if isinstance(self.right, Node) and res is None:
-			res = self.right.find_base_idx(old_params, new_params)
+			res = self.right.find_base_idx(old_params)
 		return res
 
 	#replaces instances of old_params in the binary tree with instance in new_params, and makes a copy of all nodes
@@ -111,15 +137,15 @@ class Node:
 	def is_varnode_constant(self):
 		return isinstance(self.operation, Varnode) and self.operation.isConstant()
 
-	def simplify(self):
+	def _simplify(self):
 		# TODO: better simplification in the future
 		changed = False
 		ret = self.shallow_copy()
 		if ret.left is not None:
-			ret.left, c = ret.left.simplify()
+			ret.left, c = ret.left._simplify()
 			changed |= c
 		if ret.right is not None:
-			ret.right, c = ret.right.simplify()
+			ret.right, c = ret.right._simplify()
 			changed |= c
 		if ret.operation == "*" and (self.left.is_varnode_constant()) and (self.right.is_varnode_constant()) and ret.left.operation.getSize() == ret.right.operation.getSize():
 			temp = ret.left.operation
@@ -135,9 +161,24 @@ class Node:
 			return Node(Varnode(ret.left.operation.getAddress(), ret.byte_length), ret.left.left, ret.left.right, ret.byte_length), True
 		return ret, changed
 
+	def simplify(self):
+		s, c = self._simplify()
+		while c:
+			s, c = s._simplify()
+		return s
+
 	def shallow_copy(self):
 		ret = Node(self.operation, self.left, self.right, self.byte_length)
 		return ret
+
+	def deep_copy(self):
+		left = self.left
+		right = self.right
+		if isinstance(left, Node):
+			return left.deep_copy()
+		if isinstance(right, Node):
+			return rigth.deep_copy()
+		return Node(self.operation, left, right, self.byte_length)
 
 	def is_leaf(self):
 		return self.left is None and self.right is None
@@ -207,7 +248,3 @@ class Node:
 
 	def sshr(self, other):
 		return Node("s>>", self, other, self.byte_length)
-
-
-
-

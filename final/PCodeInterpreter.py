@@ -7,6 +7,7 @@ from ghidra.program.model.pcode import HighFunctionDBUtil
 from ghidra.program.model.symbol import SourceType
 from ghidra.program.model.data import Undefined
 from ghidra.app.cmd.function import ApplyFunctionSignatureCmd
+from ghidra.program.model.listing import AutoParameterImpl
 
 NODE_LIMIT = 1
 log = False
@@ -14,6 +15,9 @@ log = False
 forward_cache = {}
 backward_cache = {}
 highfunction_cache = {}
+
+# dictionary storing func: list of symbolic parameters the func is called with for each parameter
+# this is used to apply retyping in the future
 
 cycle_node = Node("CYCLE", None, None, 0)
 
@@ -26,11 +30,13 @@ class PCodeInterpreter:
 		self.cycle_exec = {}
 		self.loop_variants = set()
 		self.arrays = []
+		self.subcall_parameter_cache = {}
 
 	def process(self, instruction, depth):
 		opcode = instruction.getOpcode()
 		output = instruction.getOutput()
 		inputs = instruction.getInputs()
+		self.depth = depth
 
 		# if output is not None:
 		# 	print "Instruction", output.getPCAddress(), instruction, depth
@@ -418,7 +424,8 @@ class PCodeInterpreter:
 		pc_addr = pc_varnode.getAddress()
 		temp = FlatProgramAPI(currentProgram)
 		called_func = temp.getFunctionAt(pc_addr)
-		print("call:", inputs[0].getPCAddress())
+		print "call:", inputs[0].getPCAddress()
+
 		# print("START CALL RECURSIVE FORWARD ANALYSIS")
 		# Note: the function analysis parameter's varnodes are DIFFERENT that the varnodes from our current state. Thus we replace the varnode -> Node map in the function with the calling parameters
 		checkFixParameters(called_func, inputs[1:])
@@ -429,25 +436,33 @@ class PCodeInterpreter:
 			parameter_nodes = []
 			for i in parameter_varnodes:
 				parameter_nodes.append(pci_new.lookup_node(i)[0])
-			forward_cache[called_func] = (pci_new.stores, pci_new.loads, parameter_nodes, pci_new.arrays)
+			forward_cache[called_func] = (pci_new.stores, pci_new.loads, parameter_nodes, pci_new.arrays, pci_new.subcall_parameter_cache)
 			log = False
 
-		stores, loads, parameter_node_objects, arrs = forward_cache[called_func]
+		stores, loads, parameter_node_objects, arrs, nested_subcall_parameter_cache = forward_cache[called_func]
 		input_node_objects = map(self.lookup_node, inputs[1:])
-		# TODO: copy array values from cache
+		if called_func not in self.subcall_parameter_cache:
+			param_list = []
+			for i in range(called_func.getParameterCount()):
+				param_list.append([])
+			self.subcall_parameter_cache[called_func] = param_list
+
+		# TODO: store replaced expresions inside subcall_parameter_cache if self.depth is 0
+		node_objects = map(self.lookup_node, inputs[1:])
+		for i in range(len(self.subcall_parameter_cache[called_func])):
+			self.subcall_parameter_cache[called_func][i] += node_objects[i]
+
 		for i in stores:
-			arg_idx = i.find_base_idx(parameter_node_objects, input_node_objects)
+			arg_idx = i.find_base_idx(parameter_node_objects)
 			if arg_idx is not None:
-				node_objects = self.lookup_node(inputs[1:][arg_idx])
-				for j in node_objects:
+				for j in node_objects[arg_idx]:
 					self.stores.append(i.replace_base_parameters(parameter_node_objects, j))
 					if i in arrs:
 						self.arrays.append(self.stores[-1])
 		for i in loads:
-			arg_idx = i.find_base_idx(parameter_node_objects, input_node_objects)
+			arg_idx = i.find_base_idx(parameter_node_objects)
 			if arg_idx is not None:
-				node_objects = self.lookup_node(inputs[1:][arg_idx])
-				for j in node_objects:
+				for j in node_objects[arg_idx]:
 					self.loads.append(i.replace_base_parameters(parameter_node_objects, j))
 					if i in arrs:
 						self.arrays.append(self.loads[-1])
@@ -456,11 +471,27 @@ class PCodeInterpreter:
 		#print(stores, loads)
 		# print("END CALL RECURSIVE FORWARD ANALYSIS")
 
+		# replace args in parameter cache:
+		for func_name in nested_subcall_parameter_cache:
+			current_params = nested_subcall_parameter_cache[func_name]
+			for param_idx in range(len(current_params)):
+				for temp in current_params[param_idx]:
+					arg_idx = temp.find_base_idx(parameter_node_objects)
+					if arg_idx is not None:
+						for j in node_objects[arg_idx]:
+							replaced = temp.replace_base_parameters(parameter_node_objects, j)
+							if func_name not in self.subcall_parameter_cache:
+								param_list = []
+								for i in range(func_name.getParameterCount()):
+									param_list.append([])
+								self.subcall_parameter_cache[func_name] = param_list
+							if arg_idx < len(self.subcall_parameter_cache[func_name]):
+								self.subcall_parameter_cache[func_name][arg_idx].append(replaced)
+
 		if output is not None:
 			if called_func not in backward_cache: # This means we want to backwards interpolate the return type
 				# print("START CALL RECURSIVE BACKWARDS ANALYSIS")
 
-				#TODO: cache function analysis types
 				print("Test fix", output.getPCAddress())
 				checkFixReturn(called_func, output)
 				pci_new = PCodeInterpreter()
@@ -473,7 +504,7 @@ class PCodeInterpreter:
 			replaced_rets = []
 			for a in ret_type:
 				for i in a:
-					arg_idx = i.find_base_idx(subfunc_parameter_node_objs, input_node_objects)
+					arg_idx = i.find_base_idx(subfunc_parameter_node_objs)
 					if arg_idx is None:
 						node_objects = [1] # Doesn't matter
 					else:
@@ -481,10 +512,8 @@ class PCodeInterpreter:
 					for j in node_objects:
 						replaced_rets.append(i.replace_base_parameters(subfunc_parameter_node_objs, j))
 
-			# TODO: support multiple return type analysis (similar to multiequal), right now we use one
 			for i in range(len(replaced_rets)):
 				self.store_node(output, replaced_rets[i])
-			# self.store_node(output, replaced_rets[0])
 
 	def copy(self, inputs, output):
 		assert len(inputs) == 1 and output is not None
@@ -584,23 +613,23 @@ def get_highfunction(func):
 
 def checkFixParameters(func, parameters):
 	hf = get_highfunction(func)
+	HighFunctionDBUtil.commitParamsToDatabase(hf, True, SourceType.DEFAULT)
+	# reload cache
+	del highfunction_cache[func]
+	hf = get_highfunction(func)
+
 	# Check arguments
 	func_proto = hf.getFunctionPrototype()
-	print("NO PARAM", len(parameters))
-	if func_proto.getNumParams() < len(parameters):
-		print func, "call signature wrong, fixing..."
-		HighFunctionDBUtil().commitParamsToDatabase(hf, True, SourceType.USER_DEFINED)
-		if func_proto.getNumParams() != len(parameters):
-			print func, "fix did not work..."
-			return
-			raise Exception("Function call signature different")
-		else:
-			raise Exception("Good, fix worked!")
+	# print("NO PARAM", func_proto.getNumParams(), len(parameters))
+	if func_proto.getNumParams() != len(parameters) and not func.hasVarArgs():
+		print func, "call signature wrong..."
+		raise Exception("Function call signature different")
 
 	argument_varnodes = []
 	for i in range(func_proto.getNumParams()):
 		cur = func_proto.getParam(i).getRepresentative()
 		if cur.getSize() != parameters[i].getSize():
+			print(cur.getSize(), parameters[i].getSize())
 			raise Exception("Func parameter size mismatch")	
 
 # Make sure func signature matches the call
@@ -671,6 +700,7 @@ def analyzeFunctionForward(func, pci):
 	print "Forwards analysis", func.getName()
 	hf = get_highfunction(func)
 	HighFunctionDBUtil.commitParamsToDatabase(hf, True, SourceType.DEFAULT)
+	print(func.getParameters())
 
 	# get the varnode of function parameters
 	func_proto = hf.getFunctionPrototype()
@@ -680,7 +710,7 @@ def analyzeFunctionForward(func, pci):
 		argument_varnodes.append(func_proto.getParam(i).getRepresentative())
 		argument_nodes.append(Node("ARG"  + str(i), None, None, argument_varnodes[i].getSize()))
 
-	hash_list = []
+	hash_list = set()
 
 	for a in range(2):
 		print("Loop variants", map(id, pci.loop_variants))
@@ -705,7 +735,7 @@ def analyzeFunctionForward(func, pci):
 
 		if a == 0:
 			for i in pci.stores + pci.loads:
-				hash_list.append(hash(i))
+				hash_list.add(hash(i))
 			continue
 
 		temp = pci.stores + pci.loads

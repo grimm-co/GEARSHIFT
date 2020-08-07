@@ -81,21 +81,26 @@ print("Start creating struct")
 args = []
 for i in range(len(argument_structs)):
 	args.append(Struct.Struct(0))
+
+used_hash = set()
+used_expressions = []
 for i in (important_stores + important_loads):
-	simplified, c = i.simplify()
-	while c:
-		simplified, c = simplified.simplify()
-	# print(i, simplified)
+	simplified = i.simplify()
+	if hash(simplified) in used_hash:
+		continue
 	try:
 		substruct, offset, grand = simplified.create_struct(args, simplified.byte_length)
 		if i in pci.arrays and not grand[0].is_array:
 			grand[0].make_array()
+		used_expressions.append(simplified)
+		used_hash.add(hash(simplified))
 		# print(str(simplified))
 	except ValueError as e:
 		print(e)
 
-struct_defs = ""
+print("Done interpolating structs")
 
+# Apply data type to original function
 orig_params = currentFunction.getParameters()
 assert len(orig_params) == len(args)
 for i in range(len(args)):
@@ -103,10 +108,28 @@ for i in range(len(args)):
 	dt = args[i].get_dtype()
 	print(dt)
 	orig_params[i].setDataType(dt, SourceType.USER_DEFINED)
+
+# Apply data types to subcall functions
+for i in range(currentFunction.getParameterCount()):
+	used_hash.add(hash("ARG{}".format(i)))
+for func in pci.subcall_parameter_cache:
+	params = pci.subcall_parameter_cache[func]
+	for param_idx in range(len(params)):
+		seen = set()
+		for j in params[param_idx]:
+			simplified = j.simplify()
+			h = hash(simplified)
+			if h in used_hash and h not in seen:
+				seen.add(h)
+				arg_idx = simplified.find_base_idx2()
+				t, off = simplified.traverse_struct(args[arg_idx])
+				if isinstance(t, Struct.Struct):
+					print "Applying type {} to function {} parameter {}".format(t.name, func, param_idx)
+					func.getParameters()[param_idx].setDataType(t.get_dtype(), SourceType.USER_DEFINED)
+
 raise Exception("END")
 
-for i in range(len(args)):
-	struct_defs += args[i].pretty_print()
+
 
 code, cleanup, arg_names = Struct.generate_struct_reader(args)
 print(struct_defs)

@@ -111,7 +111,7 @@ To implement this, symbolic execution can be performed on the data dependency no
 
 Because we are analyzing function parameters, we can consider functions to be isolated from each other. One issue you may be thinking about is the few globally shared structs that are used between functions. However, these cases are rare and much more difficult to accommodate for, as analysis will have to be performed on the entire program, so we consider this out of scope.
 
-To access the varnodes of a function, Ghidra defines a `HighFunction` class that abstractizes a function into P-Code representation. Function parameter varnodes can then be fetched from here. Additionally, the data dependency graph for which we want to do DFS is easy to traverse with the `	getDescendants()` function from `Varnode`. The DFS looks something like this:
+To access the varnodes of a function, Ghidra defines a `HighFunction` class that abstractizes a function into P-Code representation. Function parameter varnodes can then be fetched from here. Additionally, the data dependency graph for which we want to do DFS is easy to traverse with the `getDescendants()` function from `Varnode`. The DFS looks something like this:
 
 ```python
 def traverseForward(cur, depth, pci, visited):
@@ -323,7 +323,7 @@ In the first case, there is somewhat of a grey line between if this would be a s
 
 In the second case, based on the information available (a single index access), this case would best represent a struct rather than an array, based on what we as reverse engineers can see.
 
-Finally, once structs are interpolated, we can use Ghidra's API to automatically define these inferred structs in Ghidra's DataTypeManager and retype function parameters.
+Finally, once structs are interpolated, we can use Ghidra's API to automatically define these inferred structs in Ghidra's DataTypeManager and retype function parameters. Additionally, we can implement type propagation by logging the arguments to each interprocedural call, and if any of them correspond to a defined struct type, then that type is applied at the end once all the structs are created in Ghidra's DataTypeManager.
 
 # Results
 
