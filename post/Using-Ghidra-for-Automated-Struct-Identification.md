@@ -5,7 +5,7 @@ tags:
 ---
 
 \
-Over the course of my internship, I worked on projects that mainly involve binary analysis. One of which uses Ghidra to develop a plugin that automates struct identification of function parameters. The main idea behind my approach is using static analysis to symbolically interpret Ghidra's P-Code representation of binaries. Every data value will be represented in relation to a function's arguments. By obtaining a list of store and load instructions performed on data offsetted from a function's arguments, we can infer the members and member sizes of the argument's struct.
+Over the course of my internship, I worked on projects that mainly involve binary analysis. One of these projects uses Ghidra to develop a plugin that automates struct identification of function parameters. The main idea behind my approach is to use static analysis to symbolically interpret Ghidra's P-Code representation of binaries. Every data value will be represented in relation to a function's arguments. By obtaining a list of store and load instructions performed on data offset from a function's arguments, we can infer the members and member sizes of the argument's struct.
 
 This post will discuss in detail the techniques used, the background behind each technique, and the implementation.
 
@@ -19,7 +19,7 @@ One great feature about Ghidra is its [API](https://ghidra.re/ghidra_docs/api/in
 
 # Techniques
 
-My approach involves performing static symbolic analysis on the data dependency graph from Ghidra's IL (Intermediate Language) representation of all architectures. As a result, this plugin supports all architectures supported by Ghidra, and new architectures can be supported by implementing a lifter to lift the desired architecture into Ghidra's IL, which also known as P-Code.
+My approach involves performing static symbolic analysis on the data dependency graph from Ghidra's Intermediate Language (IL) representation of all architectures. As a result, this plugin supports all architectures supported by Ghidra, and new architectures can be supported by implementing a lifter to lift the desired architecture into Ghidra's IL, which also known as P-Code.
 
 ## Symbolic Analysis
 
@@ -33,11 +33,11 @@ int val3 = val2 + 1337;
 
 In this pseudocode, the only unknown input is `val1`. This value is stored symbolically. So, when the second line is executed, the value stored in `val2` will be `val1 * 5`. Similarly the symbolic expressions continue the propagate, and `val3` will be `val1 * 5 + 1337`.
 
-One major issue with symbolic execution is the path explosion problem. This occurs when a branch in the code is hit. Because symbolic execution seeks to explore the entire program, both branches will be taken, and the condition (and its inverse) for that branch will be imposed on both states after the branch. This is sound in theory, however many issues arise when you upscale the size of the program. Each conditional that is introduced will exponentially increase the possible paths that can be taken in the code.
+One major issue with symbolic execution is the path explosion problem. This occurs when a branch in the code is hit. Because symbolic execution seeks to explore the entire program, both paths from the branch will be taken, and the condition (and its inverse) for that branch will be imposed on both states after the branch. This is sound in theory, however many issues arise when you upscale the size of the program. Each conditional that is introduced will exponentially increase the possible paths that can be taken in the code. Storing symbolic state then presents a storage resource constraint, and analysis presents a time resource constraint.
 
 ## Intermediate Language
 
-Often times, we like to find the similarities in many different ideas, and abstractize them into one, for ease of understanding. This is precisely the idea behind intermediate languages. Because there exists numerous architectures out there - x86, ARM, MIPS - it isn't ideal to deal with each type individually. An intermediate language representation is created to be able to support and generalize many different architectures. Each architecture can them be transformed into this intermediate language and be treated as one problem.
+Often times, we like to find the similarities in many different ideas, and abstract them into one, for ease of understanding. This is precisely the idea behind intermediate languages. Because there exists numerous architectures out there - x86, ARM, MIPS, others - it isn't ideal to deal with each type individually. An intermediate language representation is created to be able to support and generalize many different architectures. Each architecture can then be transformed into this intermediate language and be treated as one problem.
 
 Ghidra's intermediate language is called P-Code. Every single instruction in P-Code is well documented [here](https://ghidra.re/courses/languages/html/pcoderef.html) and [here](https://ghidra.re/courses/languages/html/additionalpcode.html). Ghidra's disassembly interface has an option to enable the P-Code representation of instructions, and can be found here:
 
@@ -61,11 +61,11 @@ With the basic set of instructions defined by P-Code specifications, all of the 
 
 ## Data Dependency
 
-Data dependency is a useful abstract idea for representing code. The idea is that each instruction changes some sort of state in the program, whether it is a register, or some stack variable. This changed state may then be used elsewhere in the program, often times the next few instructions. We say that whenever the state affected by instruction A is used by another state B that is affected by some instruction, then B depends on A. Thus, there is a directed edge from A to B. The combination of all such dependencies in a program is the data dependency graph.
+Data dependency is a useful abstract idea for representing code. The idea is that each instruction changes some sort of state in the program, whether it is a register, some stack variable, or memory on the heap. This changed state may then be used elsewhere in the program, often in the next few instructions. We say that whenever the state affected by instruction A is used by another state B that is affected by some instruction, then B depends on A. Thus, there is a directed edge from A to B. The combination of all such dependencies in a program is the data dependency graph.
 
-Obtaining the data dependency graph of the assembly representation is more complicated since each architecture has different register models. First, we have to understand how Ghidra does data dependency.
+Obtaining the data dependency graph of the assembly representation is more complicated since each architecture has different register models. First, we have to understand how Ghidra handles data dependency.
 
-Ghidra's implementation of a data dependency graph uses P-Code representation. Ghidra represents each "state" (register, variable, or memory), as a node in the graph and is called [Varnode](https://ghidra.re/ghidra_docs/api/ghidra/program/model/pcode/Varnode.html). The children of a node can be fetched with `getDescendants()`, and the parent of a node with `getDef()`. You might be wondering why the parent is singular - that is why does each node only ever have one parent. It makes sense that multiple values may affect another value. However this is because Ghidra uses [SSA](https://en.wikipedia.org/wiki/Static_single_assignment_form) (single static assignment) form, and Varnodes are chained together through P-Code instructions rather than Varnode edges.
+Ghidra's implementation of a data dependency graph uses P-Code representation. Ghidra represents each "state" (register, variable, or memory), as a node in the graph called a [Varnode](https://ghidra.re/ghidra_docs/api/ghidra/program/model/pcode/Varnode.html). The children of a node can be fetched with `getDescendants()`, and the parent of a node with `getDef()`. You might be wondering why the parent is singular - that is why does each node only ever have one parent. It makes sense that multiple values may affect another value. However this is because Ghidra uses [SSA](https://en.wikipedia.org/wiki/Static_single_assignment_form) (single static assignment) form, and Varnodes are chained together through P-Code instructions rather than Varnode edges.
 
 SSA representation is a well studied idea in compiler theory. This is best demonstrated through an example. Let's use the following example:
 
@@ -103,13 +103,13 @@ The respective data dependency graph would look like:
 
 # Implementation
 
-Using a combination of these techniques, we can identify the structs of function parameters. My method drew inspiration from [Value Set Analysis](https://research.cs.wisc.edu/wpis/papers/cc04.pdf), and there is actually a similar implementation written by [penhoi](https://github.com/penhoi/ghidra-decompiler/wiki/Symbolic-Value-Set-Analysis) using Ghidra for analyzing x86-64 binaries. The main idea is that for us to infer the members of a struct, some store and load will be performed at some offset on the struct pointer. To infer the size of the member, either the size of the load/store can be used (byte, word, dword, qword), or if two contiguous members are accessed, we know to draw a boundary between the two accessed members. I chose to implement the Ghidra plugin in Python, which is ran through Ghidra's Jython interpreter.
+Using a combination of these techniques, we can identify the structs of function parameters. My method drew inspiration from [Value Set Analysis](https://research.cs.wisc.edu/wpis/papers/cc04.pdf), and there is actually a similar implementation written by [penhoi](https://github.com/penhoi/ghidra-decompiler/wiki/Symbolic-Value-Set-Analysis) using Ghidra for analyzing x86-64 binaries. The main idea is that for us to infer the members of a struct, some store and load will be performed at some offset on the struct pointer. To infer the size of the member, either the size of the load/store can be used (byte, word, dword, qword), or if two contiguous members are accessed, we know to draw a boundary between the two accessed members. I chose to implement the Ghidra plugin in Python, which is run through Ghidra's Jython interpreter.
 
-To implement this, symbolic execution can be performed on the data dependency nodes whose root nodes are the function parameters. The data dependency graph can then be traversed with DFS, and all stores and loads performed are recorded. Conveniently, all stores and loads in any architecture are abstractized into the `STORE` and `LOAD` P-Code instructions.
+To implement this, symbolic execution can be performed on the data dependency nodes whose root nodes are the function parameters. The data dependency graph can then be traversed with Depth-First Search (DFS), and all stores and loads performed are recorded. Conveniently, all stores and loads in any architecture are abstractized into the `STORE` and `LOAD` P-Code instructions.
 
 ## P-Code Function Depth-First Search
 
-Because we are analyzing function parameters, we can consider functions to be isolated from each other. One issue you may be thinking about is the few globally shared structs that are used between functions. However, these cases are rare and much more difficult to accommodate for, as analysis will have to be performed on the entire program, so we consider this out of scope.
+Because we are analyzing function parameters, we can consider functions to be isolated from each other. One issue you may be thinking about is the few globally shared structs that are used between functions. However, these cases are rare and much more difficult to accommodate for, as analysis will have to be performed on the entire program, so our initial implementation we considers this out of scope.
 
 To access the varnodes of a function, Ghidra defines a `HighFunction` class that abstractizes a function into P-Code representation. Function parameter varnodes can then be fetched from here. Additionally, the data dependency graph for which we want to do DFS is easy to traverse with the `getDescendants()` function from `Varnode`. The DFS looks something like this:
 
@@ -281,7 +281,7 @@ char* function2(test* input) {
 
 In this example, we need to know that the return value of function2 is `input->a` to be able to infer that the store, `*(c) = 'C';`, indicates that `input->a` is a `char*`.
 
-To support these ideas, two types of analysis is required. One is forward analysis, which is what we have been doing - performing DFS on function parameters and recording stores and loads. The second is backwards analysis. This is looking at all the possible return value varnodes from a function, and obtaining their symbolic definitions in relation to function parameters. Luckily backwards analysis is very easily implemented as a variation of forwards analysis through `lookup_node` on the return varnodes, and setting the definitions for the function arguments as base case. Recursion for the win!
+To support these ideas, two types of analysis are required. One is forward analysis, which is what we have been doing - performing DFS on function parameters and recording stores and loads. The second is backwards analysis. This is looking at all the possible return value varnodes from a function, and obtaining their symbolic definitions in relation to function parameters. Luckily backwards analysis is very easily implemented as a variation of forwards analysis through `lookup_node` on the return varnodes, and setting the definitions for the function arguments as base case. Recursion for the win!
 
 To improve performance, the results of forward analysis is cached, since each store and load performed on a function is in relation to the function parameters. So, we can cache these results, and replace the function parameters with the respective inputs during P-Code interpretation. Likewise, backwards analysis can also be cached the same way.
 
@@ -319,7 +319,7 @@ The solution I came up with, which may not be the best, is to use the idea of lo
 
 This method works well in the presence of loops which iterate through the array starting from index 0. However, we have to consider the case where iteration begins at an offset, and the case where only a single array index is accessed.
 
-In the first case, there is somewhat of a grey line between if this would be a struct or array. If no other members exist prior to iteration offset, then it is likely an array. However, if there are unaligned or varying sized access, then it is likely a struct.
+In the first case, there is somewhat of a grey line between if this would be a struct or array. If no other members exist prior to iteration offset, then it is likely an array. However, if there are unaligned or varying sized accesses, then it is likely a struct.
 
 In the second case, based on the information available (a single index access), this case would best represent a struct rather than an array, based on what we as reverse engineers can see.
 
