@@ -13,7 +13,7 @@ This post will discuss in detail the techniques used, the background behind each
 
 # Background
 
-Ghidra is a binary reverse engineering tool developed by the National Security Agency (NSA). Binary reverse engineering is the process of understanding the behavior of compiled binary code. To aid reverse engineers, Ghidra is a disassembler and decompiler that is able to recover high level C-like representation pseudocode from assembly, allowing reverse engineers to understand code much more easily. Ghidra also supports decompilation for over 16 architectures, which is an edge for Ghidra compared to its main competitor, IDA Pro Hex-Rays. A few examples of these architectures are: x86, x86-64, MIPS, and ARM.
+Ghidra is a binary reverse engineering tool developed by the National Security Agency (NSA). Binary reverse engineering is the process of understanding the behavior of compiled binary code. To aid reverse engineers, Ghidra is a disassembler and decompiler that is able to recover high level C-like pseudocode from assembly, allowing reverse engineers to understand code much more easily. Ghidra also supports decompilation for over 16 architectures, which is an edge for Ghidra compared to its main competitor, IDA Pro Hex-Rays. A few examples of these architectures are: x86, x86-64, MIPS, and ARM.
 
 One great feature about Ghidra is its [API](https://ghidra.re/ghidra_docs/api/index.html). Almost everything Ghidra does in the backend is accessible through Ghidra's API. Additionally, the documentation is well done, allowing me to easily understand the functions available through the API.
 
@@ -37,7 +37,7 @@ One major issue with symbolic execution is the path explosion problem. This occu
 
 ## Intermediate Language
 
-Often times, we like to find the similarities in many different ideas, and abstract them into one, for ease of understanding. This is precisely the idea behind intermediate languages. Because there exists numerous architectures out there - x86, ARM, MIPS, others - it isn't ideal to deal with each type individually. An intermediate language representation is created to be able to support and generalize many different architectures. Each architecture can then be transformed into this intermediate language and be treated as one problem.
+Often times, we like to find the similarities in many different ideas, and abstract them into one, for ease of understanding. This is precisely the idea behind intermediate languages. Because there exist numerous architectures out there - x86, ARM, MIPS, others - it isn't ideal to deal with each type individually. An intermediate language representation is created to be able to support and generalize many different architectures. Each architecture can then be transformed into this intermediate language so that they can all be treated as one problem.
 
 Ghidra's intermediate language is called P-Code. Every single instruction in P-Code is well documented [here](https://ghidra.re/courses/languages/html/pcoderef.html) and [here](https://ghidra.re/courses/languages/html/additionalpcode.html). Ghidra's disassembly interface has an option to enable the P-Code representation of instructions, and can be found here:
 
@@ -61,11 +61,11 @@ With the basic set of instructions defined by P-Code specifications, all of the 
 
 ## Data Dependency
 
-Data dependency is a useful abstract idea for representing code. The idea is that each instruction changes some sort of state in the program, whether it is a register, some stack variable, or memory on the heap. This changed state may then be used elsewhere in the program, often in the next few instructions. We say that whenever the state affected by instruction A is used by another state B that is affected by some instruction, then B depends on A. Thus, there is a directed edge from A to B. The combination of all such dependencies in a program is the data dependency graph.
+Data dependency is a useful abstract idea for analyzing code. The idea is that each instruction changes some sort of state in the program, whether it is a register, some stack variable, or memory on the heap. This changed state may then be used elsewhere in the program, often in the next few instructions. We say that whenever the state affected by instruction A is used by another state B that is affected by some instruction, then B depends on A. Thus, there is a directed edge from A to B. The combination of all such dependencies in a program is the data dependency graph.
 
 Obtaining the data dependency graph of the assembly representation is more complicated since each architecture has different register models. First, we have to understand how Ghidra handles data dependency.
 
-Ghidra's implementation of a data dependency graph uses P-Code representation. Ghidra represents each "state" (register, variable, or memory), as a node in the graph called a [Varnode](https://ghidra.re/ghidra_docs/api/ghidra/program/model/pcode/Varnode.html). The children of a node can be fetched with `getDescendants()`, and the parent of a node with `getDef()`. You might be wondering why the parent is singular - that is why does each node only ever have one parent. It makes sense that multiple values may affect another value. However this is because Ghidra uses [SSA](https://en.wikipedia.org/wiki/Static_single_assignment_form) (single static assignment) form, and Varnodes are chained together through P-Code instructions rather than Varnode edges.
+Ghidra's implementation of a data dependency graph uses P-Code representation. Ghidra represents each "state" (register, variable, or memory), as a node in the graph called a [Varnode](https://ghidra.re/ghidra_docs/api/ghidra/program/model/pcode/Varnode.html). The children of a node can be fetched with `getDescendants()`, and the parent of a node with `getDef()`. You might be wondering why the parent is singular - why each node only ever has one parent. It makes sense that multiple values may affect another value. However this is because Ghidra uses [SSA](https://en.wikipedia.org/wiki/Static_single_assignment_form) (single static assignment) form, and Varnodes are chained together through P-Code instructions rather than Varnode edges.
 
 SSA representation is a well studied idea in compiler theory. This is best demonstrated through an example. Let's use the following example:
 
@@ -105,13 +105,13 @@ The respective data dependency graph would look like:
 
 Using a combination of these techniques, we can identify the structs of function parameters. My method drew inspiration from [Value Set Analysis](https://research.cs.wisc.edu/wpis/papers/cc04.pdf), and there is actually a similar implementation written by [penhoi](https://github.com/penhoi/ghidra-decompiler/wiki/Symbolic-Value-Set-Analysis) using Ghidra for analyzing x86-64 binaries. The main idea is that for us to infer the members of a struct, some store and load will be performed at some offset on the struct pointer. To infer the size of the member, either the size of the load/store can be used (byte, word, dword, qword), or if two contiguous members are accessed, we know to draw a boundary between the two accessed members. I chose to implement the Ghidra plugin in Python, which is run through Ghidra's Jython interpreter.
 
-To implement this, symbolic execution can be performed on the data dependency nodes whose root nodes are the function parameters. The data dependency graph can then be traversed with Depth-First Search (DFS), and all stores and loads performed are recorded. Conveniently, all stores and loads in any architecture are abstractized into the `STORE` and `LOAD` P-Code instructions.
+To implement this, symbolic execution can be performed on the data dependency nodes whose root nodes are the function parameters. The data dependency graph can then be traversed with Depth-First Search (DFS), recording all stores and loads performed. Conveniently, all stores and loads in any architecture are abstracted into the `STORE` and `LOAD` P-Code instructions.
 
 ## P-Code Function Depth-First Search
 
 Because we are analyzing function parameters, we can consider functions to be isolated from each other. One issue you may be thinking about is the few globally shared structs that are used between functions. However, these cases are rare and much more difficult to accommodate for, as analysis will have to be performed on the entire program, so our initial implementation we considers this out of scope.
 
-To access the varnodes of a function, Ghidra defines a `HighFunction` class that abstractizes a function into P-Code representation. Function parameter varnodes can then be fetched from here. Additionally, the data dependency graph for which we want to do DFS is easy to traverse with the `getDescendants()` function from `Varnode`. The DFS looks something like this:
+To access the varnodes of a function, Ghidra defines a `HighFunction` class that abstracts a function into P-Code representation. Function parameter varnodes can then be fetched from here. Additionally, the data dependency graph for which we want to do DFS is easy to traverse with the `getDescendants()` function from `Varnode`. The DFS looks something like this:
 
 ```python
 def traverseForward(cur, depth, pci, visited):
@@ -338,16 +338,16 @@ typedef struct {
 } dec2;
 
 typedef struct {
-  char* buf;
-  int length;
+	char* buf;
+	int length;
 	dec2* lol;
 	dec2* lol2;
 } dec;
 
 typedef struct {
-  int return_code;
-  int return_value;
-  dec* buf;
+	int return_code;
+	int return_value;
+	dec* buf;
 } hack;
 ```
 
