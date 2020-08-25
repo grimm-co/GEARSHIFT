@@ -1,3 +1,6 @@
+# GEARSHIFT struct identifier
+# @category: GEARSHIFT
+
 from ghidra.app.decompiler import *
 from ghidra.program.model import address
 from ghidra.program.model.pcode import PcodeOp

@@ -1,3 +1,5 @@
+# @category: GEARSHIFT.internal
+
 from ghidra.program.model.pcode import PcodeOp
 from ghidra.program.model.pcode import Varnode
 from ghidra.program.flatapi import FlatProgramAPI
