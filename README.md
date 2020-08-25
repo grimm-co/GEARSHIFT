@@ -19,6 +19,15 @@ script directories:
 3. Any structs that are identified from the arguments of the function will be
    defined in Data Type Manager under $binary_name > struct.
 
+## Example Programs
+
+The `example/` directory contains example programs that can be used to try out
+the tool. Compile the example programs as follows:
+```
+cd example
+make
+```
+
 ## Leveraged technologies
 The current tool is implemented as a Ghidra script. It leverages Ghidra's intermediate language and data dependency analysis to discover struct fields, and outputs its results to the Ghidra Data Type Manager. See [the blog post](post/Using-Ghidra-for-Automated-Struct-Identification.md) for more information.
 
