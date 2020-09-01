@@ -1,5 +1,7 @@
 # GEARSHIFT
-GEARSHIFT is a tool that attempts to create a fuzz harness for a specified address in a stripped binary. It is so named because it will likely leverage a mix of reverse and forward engineering.
+GEARSHIFT is a tool that performs structure recovery for a specified function
+within a stripped binary. It is so named because it leverages a mix of reverse
+and forward engineering.
 
 ## Installation
 
@@ -29,7 +31,10 @@ make
 ```
 
 ## Leveraged technologies
-The current tool is implemented as a Ghidra script. It leverages Ghidra's intermediate language and data dependency analysis to discover struct fields, and outputs its results to the Ghidra Data Type Manager. See [the blog post](post/Using-Ghidra-for-Automated-Struct-Identification.md) for more information.
+The current tool is implemented as a Ghidra script. It leverages Ghidra's
+intermediate language and data dependency analysis to discover struct fields,
+and outputs its results to the Ghidra Data Type Manager. See
+[the associated blog post](https://blog.grimm-co.com/) for more information.
 
 ## References of interest:
 
