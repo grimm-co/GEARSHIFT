@@ -11,7 +11,7 @@ script directories:
 1. In Ghidra, open the Script Manager (Window > Script Manager)
 2. Click the "Script Directories" button to view the list of directories
 3. Note the name of a directory. If there isn't one you can edit, add a new directory.
-4. Copy all the python files in `final/` to the chosen directory.
+4. Copy all the python files in `plugin/` to the chosen directory.
 5. Click the "Refresh Script List" button. The scripts should appear in the GEARSHIFT folder in the Script Manager.
 
 ## Usage
