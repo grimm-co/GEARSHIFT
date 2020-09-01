@@ -26,8 +26,8 @@ script directories:
 The `example/` directory contains example programs that can be used to try out
 the tool. Compile the example programs as follows:
 ```
-cd example
-make
+$ cd example
+$ make
 ```
 
 ## Leveraged technologies
