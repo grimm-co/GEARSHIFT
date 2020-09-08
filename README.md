@@ -1,5 +1,7 @@
 # GEARSHIFT
-GEARSHIFT is a tool that attempts to create a fuzz harness for a specified address in a stripped binary. It is so named because it will likely leverage a mix of reverse and forward engineering.
+GEARSHIFT is a tool that performs structure recovery for a specified function
+within a stripped binary. It is so named because it leverages a mix of reverse
+and forward engineering.
 
 ## Installation
 
@@ -9,7 +11,7 @@ script directories:
 1. In Ghidra, open the Script Manager (Window > Script Manager)
 2. Click the "Script Directories" button to view the list of directories
 3. Note the name of a directory. If there isn't one you can edit, add a new directory.
-4. Copy all the python files in `final/` to the chosen directory.
+4. Copy all the python files in `plugin/` to the chosen directory.
 5. Click the "Refresh Script List" button. The scripts should appear in the GEARSHIFT folder in the Script Manager.
 
 ## Usage
@@ -24,12 +26,15 @@ script directories:
 The `example/` directory contains example programs that can be used to try out
 the tool. Compile the example programs as follows:
 ```
-cd example
-make
+$ cd example
+$ make
 ```
 
 ## Leveraged technologies
-The current tool is implemented as a Ghidra script. It leverages Ghidra's intermediate language and data dependency analysis to discover struct fields, and outputs its results to the Ghidra Data Type Manager. See [the blog post](post/Using-Ghidra-for-Automated-Struct-Identification.md) for more information.
+The current tool is implemented as a Ghidra script. It leverages Ghidra's
+intermediate language and data dependency analysis to discover struct fields,
+and outputs its results to the Ghidra Data Type Manager. See
+[the associated blog post](https://blog.grimm-co.com/) for more information.
 
 ## References of interest:
 
