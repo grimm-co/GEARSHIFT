@@ -1,3 +1,5 @@
+# @category: GEARSHIFT.internal
+
 from Struct import Struct
 from ghidra.program.model.pcode import Varnode
 

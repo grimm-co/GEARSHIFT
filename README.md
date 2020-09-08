@@ -1,19 +1,35 @@
 # GEARSHIFT
 GEARSHIFT is a tool that attempts to create a fuzz harness for a specified address in a stripped binary. It is so named because it will likely leverage a mix of reverse and forward engineering.
 
-## Proposal
-Information from the original research proposal can be found in [proposal.md](proposal.md).
+## Installation
+
+To install the Ghidra script, copy the python files to one of your Ghidra
+script directories:
+
+1. In Ghidra, open the Script Manager (Window > Script Manager)
+2. Click the "Script Directories" button to view the list of directories
+3. Note the name of a directory. If there isn't one you can edit, add a new directory.
+4. Copy all the python files in `final/` to the chosen directory.
+5. Click the "Refresh Script List" button. The scripts should appear in the GEARSHIFT folder in the Script Manager.
+
+## Usage
+
+1. Select a function whose arguments you want to analyze.
+2. From the Script Manager, under GEARSHIFT, select go.py and click Run.
+3. Any structs that are identified from the arguments of the function will be
+   defined in Data Type Manager under $binary_name > struct.
+
+## Example Programs
+
+The `example/` directory contains example programs that can be used to try out
+the tool. Compile the example programs as follows:
+```
+cd example
+make
+```
 
 ## Leveraged technologies
-The initial plan intends to leverage disassemblers' existing parsing and code flow determination, as well as symbolic analysis engine(s) and, where applicable, debug symbols or source-assisted techniques.
-
-### Disassembly
-By allowing existing disassembly engines to determine executable and procedure entry points, static cross references can be used to find syntactic information about calls to the specified address. Additionally, disassemblers' ability to track arguments from API calls' arguments and return types to arguments passed to our address of interest will allow for more stringent harness creation.
-
-### Symbolic Execution
-Symbolic engines will allow for input bounding on arguments to the specified address, and may in some cases also give typing information. Input bounding (or value bounding within procedure flow) can then be used when generating input within a fuzzer.
-
-### Open source projects used:
+The current tool is implemented as a Ghidra script. It leverages Ghidra's intermediate language and data dependency analysis to discover struct fields, and outputs its results to the Ghidra Data Type Manager. See [the blog post](post/Using-Ghidra-for-Automated-Struct-Identification.md) for more information.
 
 ## References of interest:
 

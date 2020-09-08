@@ -1,3 +1,5 @@
+# @category: GEARSHIFT.internal
+
 linux_template = """#include <stdio.h>
 #include <stdlib.h>
 #include <dlfcn.h>

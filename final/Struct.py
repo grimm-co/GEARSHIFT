@@ -1,3 +1,5 @@
+# @category: GEARSHIFT.internal
+
 from ghidra.program.model.data import StructureDataType, CategoryPath, DataTypeConflictHandler, PointerDataType, BuiltInDataTypeManager, ArrayDataType
 
 class Struct:

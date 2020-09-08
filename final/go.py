@@ -1,3 +1,6 @@
+# GEARSHIFT struct identifier
+# @category: GEARSHIFT
+
 from ghidra.app.decompiler import *
 from ghidra.program.model import address
 from ghidra.program.model.pcode import PcodeOp
@@ -127,20 +130,16 @@ for func in pci.subcall_parameter_cache:
 					print "Applying type {} to function {} parameter {}".format(t.name, func, param_idx)
 					func.getParameters()[param_idx].setDataType(t.get_dtype(), SourceType.USER_DEFINED)
 
-raise Exception("END")
-
-
-
-code, cleanup, arg_names = Struct.generate_struct_reader(args)
-print(struct_defs)
-print(code)
-print(cleanup)
-print(arg_names)
-
-harness = generate_linux_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
-harness2 = generate_windows_harness(struct_defs, program_path, function_offset + base_address, code, cleanup, arg_names)
-print(harness)
-print(harness2)
+#code, cleanup, arg_names = Struct.generate_struct_reader(args)
+#print(struct_defs)
+#print(code)
+#print(cleanup)
+#print(arg_names)
+#
+#harness = generate_linux_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
+#harness2 = generate_windows_harness(struct_defs, program_path, function_offset + base_address, code, cleanup, arg_names)
+#print(harness)
+#print(harness2)
 
 end = time.time()
 print "DONE - Took:", (end - start)
