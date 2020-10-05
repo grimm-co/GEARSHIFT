@@ -1,5 +1,7 @@
 # @category: GEARSHIFT.internal
 
+from __future__ import print_function
+
 from ghidra.program.model.pcode import PcodeOp
 from ghidra.program.model.pcode import Varnode
 from ghidra.program.flatapi import FlatProgramAPI
@@ -41,9 +43,9 @@ class PCodeInterpreter:
 		self.depth = depth
 
 		# if output is not None:
-		# 	print "Instruction", output.getPCAddress(), instruction, depth
+		# 	print("Instruction", output.getPCAddress(), instruction, depth)
 		# else:
-		# 	print "Instruction", inputs[0].getPCAddress(), instruction, depth
+		# 	print("Instruction", inputs[0].getPCAddress(), instruction, depth)
 
 		saved_instruction = self.instruction
 		self.instruction = instruction
@@ -120,12 +122,12 @@ class PCodeInterpreter:
 			self.indirect(inputs, output)
 		elif opcode == PcodeOp.RETURN:
 			if len(inputs) >= 2:
-				print "RETURN"
+				print("RETURN")
 				print(self.lookup_node(inputs[1]))
 		elif opcode == PcodeOp.CBRANCH:
 			pass
 		else:
-			print "Unsupported Opcode:", instruction.getMnemonic(), inputs[0].getPCAddress(),
+			print("Unsupported Opcode:", instruction.getMnemonic(), inputs[0].getPCAddress())
 
 		self.instruction = saved_instruction
 
@@ -325,9 +327,9 @@ class PCodeInterpreter:
 					temp = temp.resize(j.byte_length)
 				self.stores.append(temp)
 				if log:
-					print "[*]", "STORE:", inputs[0].getPCAddress(), temp
-					print "VALUE", self.lookup_node(inputs[2])
-					print ""
+					print("[*]", "STORE:", inputs[0].getPCAddress(), temp)
+					print("VALUE", self.lookup_node(inputs[2]))
+					print("")
 
 	def load(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
@@ -337,7 +339,7 @@ class PCodeInterpreter:
 				value = value.resize(output.getSize())
 			self.store_node(output, value)
 			self.loads.append(value)
-			# print "LOAD:", value
+			# print("LOAD:", value)
 
 	def subpiece(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
@@ -413,7 +415,7 @@ class PCodeInterpreter:
 
 	def callind(self, inputs, output):
 		assert len(inputs) >= 1
-		print "Warning: indirect call - skipping and returning 0"
+		print("Warning: indirect call - skipping and returning 0")
 		if output is not None:
 			self.store_node(output, Node(Varnode(output.getAddress(), output.getSize()), None, None, output.getSize()))
 
@@ -426,7 +428,7 @@ class PCodeInterpreter:
 		pc_addr = pc_varnode.getAddress()
 		temp = FlatProgramAPI(currentProgram)
 		called_func = temp.getFunctionAt(pc_addr)
-		print "call:", inputs[0].getPCAddress()
+		print("call:", inputs[0].getPCAddress())
 
 		# print("START CALL RECURSIVE FORWARD ANALYSIS")
 		# Note: the function analysis parameter's varnodes are DIFFERENT that the varnodes from our current state. Thus we replace the varnode -> Node map in the function with the calling parameters
@@ -535,24 +537,24 @@ class PCodeInterpreter:
 		if varnode in self.cycle_exec:
 			self.cycle_exec[varnode] += 1
 		if varnode in self.cycle_exec and self.cycle_exec[varnode] > 0:
-			# print "CYCLE DETECTED", varnode
-			# print "CYCLE OPERATION", self.instruction
+			# print("CYCLE DETECTED", varnode)
+			# print("CYCLE OPERATION", self.instruction)
 			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
 			if varnode not in self.nodes:
 				self.store_node(varnode, Node(("CYCLE", varnode), None, None, varnode.getSize()))
 			return self.nodes[varnode]
 		"""
 		if varnode in self.nodes and varnode in self.cycle_exec:
-			print "CYCLE DETECTED", varnode
-			print "CYCLE OPERATION", self.instruction
+			print("CYCLE DETECTED", varnode)
+			print("CYCLE OPERATION", self.instruction)
 			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
 			for i in self.nodes[varnode]:
 				i.cyclic = True
 				print("Make cyclic", i)
 			ins1 = varnode.getDef()
 			ins2 = self.instruction
-			print ins1.getOutput().getPCAddress(), ins1
-			print ins2.getInputs()[0].getPCAddress(), ins2
+			print(ins1.getOutput().getPCAddress(), ins1)
+			print(ins2.getInputs()[0].getPCAddress(), ins2)
 
 			# Here we want to undefine the loop variant, then 
 
@@ -624,7 +626,7 @@ def checkFixParameters(func, parameters):
 	func_proto = hf.getFunctionPrototype()
 	# print("NO PARAM", func_proto.getNumParams(), len(parameters))
 	if func_proto.getNumParams() != len(parameters) and not func.hasVarArgs():
-		print func, "call signature wrong..."
+		print(func, "call signature wrong...")
 		raise Exception("Function call signature different")
 
 	argument_varnodes = []
@@ -646,7 +648,7 @@ def checkFixReturn(func, ret_varnode):
 	for i in hf.getPcodeOps():
 		if i.getOpcode() == PcodeOp.RETURN:
 			if len(i.getInputs()) < 2:
-				print func, "has no return value, fixing type...", i.getInputs()[0].getPCAddress()
+				print(func, "has no return value, fixing type...", i.getInputs()[0].getPCAddress())
 				sig = func.getSignature()
 				sig.setReturnType(Undefined.getUndefinedDataType(ret_varnode.getSize()))
 				ApplyFunctionSignatureCmd(func.getEntryPoint(), sig, SourceType.USER_DEFINED).applyTo(currentProgram)
@@ -655,7 +657,7 @@ def checkFixReturn(func, ret_varnode):
 # This function performs backwards analysis on the function return type with base case of function parameters
 # init_param replaces the parameters of the current func to be analyzed in terms the passed parameter expressions
 def analyzeFunctionBackward(func, pci, init_param=None):
-	print "Backwards analysis", func.getName()
+	print("Backwards analysis", func.getName())
 
 	hf = get_highfunction(func)
 	HighFunctionDBUtil.commitParamsToDatabase(hf, True, SourceType.DEFAULT)
@@ -699,7 +701,7 @@ def traverseForward(cur, depth, pci, visited):
 
 # This function performs forward analysis on function parameters to determine its type (struct, array, or primitive)
 def analyzeFunctionForward(func, pci):
-	print "Forwards analysis", func.getName()
+	print("Forwards analysis", func.getName())
 	hf = get_highfunction(func)
 	HighFunctionDBUtil.commitParamsToDatabase(hf, True, SourceType.DEFAULT)
 	print(func.getParameters())
