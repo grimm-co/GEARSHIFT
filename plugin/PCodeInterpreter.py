@@ -43,9 +43,9 @@ class PCodeInterpreter:
 		self.depth = depth
 
 		# if output is not None:
-		# 	print("Instruction", output.getPCAddress(), instruction, depth)
+		# 	print "Instruction", output.getPCAddress(), instruction, depth
 		# else:
-		# 	print("Instruction", inputs[0].getPCAddress(), instruction, depth)
+		# 	print "Instruction", inputs[0].getPCAddress(), instruction, depth
 
 		saved_instruction = self.instruction
 		self.instruction = instruction
@@ -339,7 +339,7 @@ class PCodeInterpreter:
 				value = value.resize(output.getSize())
 			self.store_node(output, value)
 			self.loads.append(value)
-			# print("LOAD:", value)
+			# print "LOAD:", value
 
 	def subpiece(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
@@ -537,24 +537,24 @@ class PCodeInterpreter:
 		if varnode in self.cycle_exec:
 			self.cycle_exec[varnode] += 1
 		if varnode in self.cycle_exec and self.cycle_exec[varnode] > 0:
-			# print("CYCLE DETECTED", varnode)
-			# print("CYCLE OPERATION", self.instruction)
+			# print "CYCLE DETECTED", varnode
+			# print "CYCLE OPERATION", self.instruction
 			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
 			if varnode not in self.nodes:
 				self.store_node(varnode, Node(("CYCLE", varnode), None, None, varnode.getSize()))
 			return self.nodes[varnode]
 		"""
 		if varnode in self.nodes and varnode in self.cycle_exec:
-			print("CYCLE DETECTED", varnode)
-			print("CYCLE OPERATION", self.instruction)
+			print "CYCLE DETECTED", varnode
+			print "CYCLE OPERATION", self.instruction
 			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
 			for i in self.nodes[varnode]:
 				i.cyclic = True
 				print("Make cyclic", i)
 			ins1 = varnode.getDef()
 			ins2 = self.instruction
-			print(ins1.getOutput().getPCAddress(), ins1)
-			print(ins2.getInputs()[0].getPCAddress(), ins2)
+			print ins1.getOutput().getPCAddress(), ins1
+			print ins2.getInputs()[0].getPCAddress(), ins2
 
 			# Here we want to undefine the loop variant, then 
 
