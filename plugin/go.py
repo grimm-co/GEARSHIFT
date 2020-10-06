@@ -73,11 +73,9 @@ argument_structs = [None] * len(argument_varnodes)
 for i in pci.stores:
 	if i.contains(argument_node_objs):
 		important_stores.append(i)
-		# print(i)
 for i in pci.loads:
 	if i.contains(argument_node_objs):
 		important_loads.append(i)
-		# print(i)
 
 print("Start creating struct")
 
@@ -97,7 +95,6 @@ for i in (important_stores + important_loads):
 			grand[0].make_array()
 		used_expressions.append(simplified)
 		used_hash.add(hash(simplified))
-		# print(str(simplified))
 	except ValueError as e:
 		print(e)
 
@@ -130,18 +127,5 @@ for func in pci.subcall_parameter_cache:
 					print "Applying type {} to function {} parameter {}".format(t.name, func, param_idx)
 					func.getParameters()[param_idx].setDataType(t.get_dtype(), SourceType.USER_DEFINED)
 
-#code, cleanup, arg_names = Struct.generate_struct_reader(args)
-#print(struct_defs)
-#print(code)
-#print(cleanup)
-#print(arg_names)
-#
-#harness = generate_linux_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
-#harness2 = generate_windows_harness(struct_defs, program_path, function_offset + base_address, code, cleanup, arg_names)
-#print(harness)
-#print(harness2)
-
 end = time.time()
 print "DONE - Took:", (end - start)
-
-# execfile("D:\\CTF\\research\\gearshift\\pcode_trace\\files\\go.py")

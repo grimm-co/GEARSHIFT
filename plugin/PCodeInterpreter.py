@@ -40,11 +40,6 @@ class PCodeInterpreter:
 		inputs = instruction.getInputs()
 		self.depth = depth
 
-		# if output is not None:
-		# 	print "Instruction", output.getPCAddress(), instruction, depth
-		# else:
-		# 	print "Instruction", inputs[0].getPCAddress(), instruction, depth
-
 		saved_instruction = self.instruction
 		self.instruction = instruction
 
@@ -337,7 +332,6 @@ class PCodeInterpreter:
 				value = value.resize(output.getSize())
 			self.store_node(output, value)
 			self.loads.append(value)
-			# print "LOAD:", value
 
 	def subpiece(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
@@ -377,7 +371,6 @@ class PCodeInterpreter:
 		self.loop_variants.add(output)
 
 		# TODO: prune possibilities
-		# print "Multiequal", output.getPCAddress(), possibilities
 
 	def int_sext(self, inputs, output):
 		assert output is not None and len(inputs) == 1
@@ -428,7 +421,8 @@ class PCodeInterpreter:
 		called_func = temp.getFunctionAt(pc_addr)
 		print "call:", inputs[0].getPCAddress()
 
-		# print("START CALL RECURSIVE FORWARD ANALYSIS")
+		##### START CALL RECURSIVE FORWARD ANALYSIS
+
 		# Note: the function analysis parameter's varnodes are DIFFERENT that the varnodes from our current state. Thus we replace the varnode -> Node map in the function with the calling parameters
 		checkFixParameters(called_func, inputs[1:])
 		if called_func not in forward_cache:
@@ -469,9 +463,7 @@ class PCodeInterpreter:
 					if i in arrs:
 						self.arrays.append(self.loads[-1])
 
-			# raise Exception("L")
-		#print(stores, loads)
-		# print("END CALL RECURSIVE FORWARD ANALYSIS")
+		##### END CALL RECURSIVE FORWARD ANALYSIS
 
 		# replace args in parameter cache:
 		for func_name in nested_subcall_parameter_cache:
@@ -492,15 +484,14 @@ class PCodeInterpreter:
 
 		if output is not None:
 			if called_func not in backward_cache: # This means we want to backwards interpolate the return type
-				# print("START CALL RECURSIVE BACKWARDS ANALYSIS")
+				##### START CALL RECURSIVE BACKWARDS ANALYSIS
 
-				print("Test fix", output.getPCAddress())
 				checkFixReturn(called_func, output)
 				pci_new = PCodeInterpreter()
 				ret_type, subfunc_parameter_varnodes = analyzeFunctionBackward(called_func, pci_new)
 				backward_cache[called_func] = (ret_type, map(pci_new.lookup_node, subfunc_parameter_varnodes))
 
-				# print("END CALL RECURSIVE BACKWARDS ANALYSIS")
+				##### END CALL RECURSIVE BACKWARDS ANALYSIS
 
 			ret_type, subfunc_parameter_node_objs = backward_cache[called_func]
 			replaced_rets = []
@@ -531,32 +522,12 @@ class PCodeInterpreter:
 	# maps a Ghidra Varnode object to a binary tree object that represents its expression
 	def lookup_node(self, varnode):
 		# Detect cycle
-		# print("Lookup", varnode)
 		if varnode in self.cycle_exec:
 			self.cycle_exec[varnode] += 1
 		if varnode in self.cycle_exec and self.cycle_exec[varnode] > 0:
-			# print "CYCLE DETECTED", varnode
-			# print "CYCLE OPERATION", self.instruction
-			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
 			if varnode not in self.nodes:
 				self.store_node(varnode, Node(("CYCLE", varnode), None, None, varnode.getSize()))
 			return self.nodes[varnode]
-		"""
-		if varnode in self.nodes and varnode in self.cycle_exec:
-			print "CYCLE DETECTED", varnode
-			print "CYCLE OPERATION", self.instruction
-			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
-			for i in self.nodes[varnode]:
-				i.cyclic = True
-				print("Make cyclic", i)
-			ins1 = varnode.getDef()
-			ins2 = self.instruction
-			print ins1.getOutput().getPCAddress(), ins1
-			print ins2.getInputs()[0].getPCAddress(), ins2
-
-			# Here we want to undefine the loop variant, then 
-
-		elif varnode.isConstant():"""
 		if varnode.isConstant():
 			# create constant node
 			return [Node(varnode, None, None, varnode.getSize())]
@@ -564,19 +535,15 @@ class PCodeInterpreter:
 			return [Node(varnode, None, None, varnode.getSize())]
 		elif varnode not in self.nodes or varnode in self.cycle_exec:
 			# We have to detect cycles here, by temporarily storing "CYCLE", and if the returned value is "CYCLE", we know there is cycle
-			# self.store_node(varnode, cycle_node)
 			if varnode not in self.cycle_exec:
 				self.cycle_exec[varnode] = 0
 			
-			# print("START CYCLE")
 			self.get_node_definition(varnode)
-			# print("END CYCLE")
 
 			if self.cycle_exec[varnode] == 0:
 				del self.cycle_exec[varnode]
 
 			return self.lookup_node(varnode)
-		# print("Lookup Result", self.nodes[varnode])
 
 		# Prune
 		if len(self.nodes[varnode]) > NODE_LIMIT:
@@ -600,7 +567,6 @@ class PCodeInterpreter:
 		if varnode not in self.nodes:
 			self.nodes[varnode] = []
 		if hash(nodeobj) not in map(hash, self.nodes[varnode]):
-		#if (nodeobj.relevant() or len(self.nodes[varnode]) == 0) and hash(nodeobj) not in map(hash, self.nodes[varnode]):
 			self.nodes[varnode].append(nodeobj)
 
 def get_highfunction(func):
@@ -622,7 +588,6 @@ def checkFixParameters(func, parameters):
 
 	# Check arguments
 	func_proto = hf.getFunctionPrototype()
-	# print("NO PARAM", func_proto.getNumParams(), len(parameters))
 	if func_proto.getNumParams() != len(parameters) and not func.hasVarArgs():
 		print func, "call signature wrong..."
 		raise Exception("Function call signature different")
@@ -636,9 +601,6 @@ def checkFixParameters(func, parameters):
 
 # Make sure func signature matches the call
 def checkFixReturn(func, ret_varnode):
-	# sig = func.getSignature()
-	# sig.setReturnType(Undefined.getUndefinedDataType(0x4))
-	# ApplyFunctionSignatureCmd(func.getEntryPoint(), sig, SourceType.USER_DEFINED).applyTo(currentProgram)
 	hf = get_highfunction(func)
 
 	func_proto = hf.getFunctionPrototype()
@@ -650,7 +612,6 @@ def checkFixReturn(func, ret_varnode):
 				sig = func.getSignature()
 				sig.setReturnType(Undefined.getUndefinedDataType(ret_varnode.getSize()))
 				ApplyFunctionSignatureCmd(func.getEntryPoint(), sig, SourceType.USER_DEFINED).applyTo(currentProgram)
-				#checkFixReturn(func, ret_varnode)
 
 # This function performs backwards analysis on the function return type with base case of function parameters
 # init_param replaces the parameters of the current func to be analyzed in terms the passed parameter expressions
@@ -727,7 +688,6 @@ def analyzeFunctionForward(func, pci):
 
 		pci.nodes = new_nodes
 
-		# print("Return Node:", ret_varnode)
 		for arg in range(len(argument_varnodes)):
 			pci.store_node(argument_varnodes[arg], argument_nodes[arg])
 

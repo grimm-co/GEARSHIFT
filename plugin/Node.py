@@ -56,7 +56,6 @@ class Node:
 		elif self.operation == "*()":
 			assert isinstance(self.left, Node)
 			sub_struct, offset, grand = self.left.create_struct(arg_struct_list, self.byte_length)
-			# if parent_byte_length == 1:
 			if not isinstance(sub_struct, Struct):
 				temp = Struct(offset + parent_byte_length)
 				grand[0].insert(grand[1], (temp, ARCH_BITS / 8))
