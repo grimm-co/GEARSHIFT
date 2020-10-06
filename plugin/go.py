@@ -106,8 +106,11 @@ print("Done interpolating structs")
 # Apply data type to original function
 orig_params = currentFunction.getParameters()
 assert len(orig_params) == len(args)
+struct_code = []
 for i in range(len(args)):
-	print(args[i].pretty_print())
+	code = args[i].pretty_print()
+	struct_code.append(code)
+	print(code)
 	dt = args[i].get_dtype()
 	print(dt)
 	orig_params[i].setDataType(dt, SourceType.USER_DEFINED)
@@ -130,16 +133,15 @@ for func in pci.subcall_parameter_cache:
 					print "Applying type {} to function {} parameter {}".format(t.name, func, param_idx)
 					func.getParameters()[param_idx].setDataType(t.get_dtype(), SourceType.USER_DEFINED)
 
-#code, cleanup, arg_names = Struct.generate_struct_reader(args)
-#print(struct_defs)
-#print(code)
-#print(cleanup)
-#print(arg_names)
-#
-#harness = generate_linux_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
-#harness2 = generate_windows_harness(struct_defs, program_path, function_offset + base_address, code, cleanup, arg_names)
-#print(harness)
-#print(harness2)
+code, cleanup, arg_names = Struct.generate_struct_reader(args)
+struct_defs = "".join(struct_code)
+
+linux_harness = generate_linux_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
+windows_harness = generate_windows_harness(struct_defs, program_path, function_offset + base_address, code, cleanup, arg_names)
+print("linux harness:")
+print(linux_harness)
+print("windows harness:")
+print(windows_harness)
 
 end = time.time()
 print "DONE - Took:", (end - start)
