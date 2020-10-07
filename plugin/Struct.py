@@ -217,7 +217,7 @@ class Struct:
 			if isinstance(self.members[c][0], Struct):
 				length += ARCH_BITS / 8
 				if not self.members[c][0].is_array:
-					res += "{}* entry_{};\n".format(self.members[c][0].name, entry_counter)
+					res += "struct {}* entry_{};\n".format(self.members[c][0].name, entry_counter)
 					res = self.members[c][0].pretty_print() + "\n" + res
 				else:
 					res += "uint{}_t* entry_{};\n".format(self.members[c][0].stride * 8, entry_counter)
@@ -238,7 +238,7 @@ def do_read(struct, current_reference):
 		total_length = 0
 		for i in range(len(struct.members)):
 			total_length += struct.members[i][1]
-		ret += "{} = ({}*)malloc({});\n".format(current_reference, struct.name, total_length)
+		ret += "{} = (struct {}*)malloc({});\n".format(current_reference, struct.name, total_length)
 		for i in range(len(struct.members)):
 			value = struct.members[i][0]
 			length = struct.members[i][1]
@@ -282,7 +282,7 @@ def generate_struct_reader(args):
 			cur = args[i]
 			if isinstance(cur, Struct) and not cur.is_array:
 				# struct
-				code += cur.name + "* arg_{};\n".format(i)
+				code += "struct {}* arg_{};\n".format(cur.name, i)
 				res, clean = do_read(cur, "arg_{}".format(i))
 				code += res
 				cleanup += clean

@@ -140,7 +140,7 @@ code, cleanup, arg_names = Struct.generate_struct_reader(args)
 struct_defs = "".join(struct_code)
 
 linux_harness = generate_linux_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
-windows_harness = generate_windows_harness(struct_defs, program_path, function_offset + base_address, code, cleanup, arg_names)
+windows_harness = generate_windows_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
 
 linux_filename = os.path.abspath('gearshift_harness_linux.c')
 windows_filename = os.path.abspath('gearshift_harness_windows.c')
