@@ -133,7 +133,7 @@ for func in pci.subcall_parameter_cache:
 				arg_idx = simplified.find_base_idx2()
 				t, off = simplified.traverse_struct(args[arg_idx])
 				if isinstance(t, Struct.Struct):
-					print "Applying type {} to function {} parameter {}".format(t.name, func, param_idx)
+					print("Applying type {} to function {} parameter {}".format(t.name, func, param_idx))
 					func.getParameters()[param_idx].setDataType(t.get_dtype(), SourceType.USER_DEFINED)
 
 code, cleanup, arg_names = Struct.generate_struct_reader(args)
@@ -153,6 +153,6 @@ with open(windows_filename, 'w') as harness:
     harness.write(windows_harness)
 
 end = time.time()
-print "DONE - Took:", (end - start)
+print("DONE - Took:", (end - start))
 
 # execfile("D:\\CTF\\research\\gearshift\\pcode_trace\\files\\go.py")

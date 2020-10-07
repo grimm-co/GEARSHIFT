@@ -1,5 +1,7 @@
 # @category: GEARSHIFT.internal
 
+from __future__ import print_function
+
 from Struct import Struct
 from ghidra.program.model.pcode import Varnode
 
