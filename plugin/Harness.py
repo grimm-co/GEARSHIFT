@@ -13,7 +13,7 @@ int main(int argc, char** argv) {{
 	void* handle = dlopen("{process_path}", RTLD_LAZY);
 	// In glibc, the handle points to the library base address
 	char* base = *((char**)handle);
-	func f = (func)(base + {func_offset});
+	func f = (func)(base + 0x{func_offset:x});
 
 	FILE* h = fopen(argv[1], "r");
 
@@ -45,7 +45,7 @@ int main(int argc, char** argv) {{
 
 	// On Windows, the handle is the library base address
 	char* base = (char*)lib;
-	func f = (func)(base + {func_offset});
+	func f = (func)(base + 0x{func_offset:x});
 
 	FILE* h;
 	fopen_s(&h, argv[1], "r");
@@ -61,7 +61,7 @@ int main(int argc, char** argv) {{
 """
 
 def generate_linux_harness(struct_defs, ppath, func_off, code, cleanup, args):
-	return linux_template.format(structs=struct_defs, process_path=ppath, func_offset=hex(func_off), code="\t" + code.replace("\n", "\n\t"), cleanup="\t" + cleanup.replace("\n", "\n\t"), args=args)
+	return linux_template.format(structs=struct_defs, process_path=ppath, func_offset=func_off, code="\t" + code.replace("\n", "\n\t"), cleanup="\t" + cleanup.replace("\n", "\n\t"), args=args)
 
 def generate_windows_harness(struct_defs, ppath, func_off, code, cleanup, args):
-	return windows_template.format(structs=struct_defs, process_path=ppath, func_offset=hex(func_off), code="\t" + code.replace("\n", "\n\t"), cleanup="\t" + cleanup.replace("\n", "\n\t"), args=args)
+	return windows_template.format(structs=struct_defs, process_path=ppath, func_offset=func_off, code="\t" + code.replace("\n", "\n\t"), cleanup="\t" + cleanup.replace("\n", "\n\t"), args=args)
