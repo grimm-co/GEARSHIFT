@@ -1,6 +1,10 @@
 # GEARSHIFT struct identifier
 # @category: GEARSHIFT
 
+from __future__ import print_function
+import time
+import os.path
+
 from ghidra.app.decompiler import *
 from ghidra.program.model import address
 from ghidra.program.model.pcode import PcodeOp
@@ -13,7 +17,6 @@ from ghidra.program.model.pcode import HighFunctionDBUtil
 import PCodeInterpreter
 import Node
 import Struct
-import time
 from Harness import *
 
 # Global config
@@ -138,10 +141,16 @@ struct_defs = "".join(struct_code)
 
 linux_harness = generate_linux_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
 windows_harness = generate_windows_harness(struct_defs, program_path, function_offset + base_address, code, cleanup, arg_names)
-print("linux harness:")
-print(linux_harness)
-print("windows harness:")
-print(windows_harness)
+
+linux_filename = os.path.abspath('gearshift_harness_linux.c')
+windows_filename = os.path.abspath('gearshift_harness_windows.c')
+
+print("writing linux harness to", linux_filename)
+with open(linux_filename, 'w') as harness:
+    harness.write(linux_harness)
+print("writing windows harness to", windows_filename)
+with open(windows_filename, 'w') as harness:
+    harness.write(windows_harness)
 
 end = time.time()
 print "DONE - Took:", (end - start)

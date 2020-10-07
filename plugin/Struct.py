@@ -224,7 +224,7 @@ class Struct:
 				if len(self.members[c]) > 2:
 					res = res[:-1] + " //NOT ACCESSED\n"
 				length += self.members[c][1]
-		self.pretty = res + "}"
+		self.pretty = res + "};"
 		return self.pretty
 
 def do_read(struct, current_reference):
