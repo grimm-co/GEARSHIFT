@@ -4,7 +4,7 @@ from __future__ import print_function
 
 from ghidra.program.model.data import StructureDataType, CategoryPath, DataTypeConflictHandler, PointerDataType, BuiltInDataTypeManager, ArrayDataType
 
-class Struct:
+class Struct(object):
 	def __init__(self, size):
 		self.size = size # Total size of the struct
 		self.members = [(0, 1)] * size # Represents member (value, member_size)
@@ -229,68 +229,88 @@ class Struct:
 		self.pretty = res + "};"
 		return self.pretty
 
-def do_read(struct, current_reference):
-	ret = ""
-	clean = ""
+class Generator(object):
+	def __init__(self):
+		self.allocation_counter = 0
 
-	if not struct.is_array:
-		curoff = 0
-		total_length = 0
-		for i in range(len(struct.members)):
-			total_length += struct.members[i][1]
-		ret += "{} = (struct {}*)malloc({});\n".format(current_reference, struct.name, total_length)
-		for i in range(len(struct.members)):
-			value = struct.members[i][0]
-			length = struct.members[i][1]
-			if type(value) is int and value & 0xff == 0x0:
-				ret += "fread((char*)&{}->entry_{}, 1, {}, h);\n".format(current_reference, i, length)
-			elif type(value) is int and value & 0xff == 0x1:
-				# TODO: better array length
-				ret += "{}->entry_{} = (char*)malloc({});\n".format(current_reference, i, (value >> 8) + 1);
-				ret += "{}->entry_{}[{}] = 0;\n".format(current_reference, i, (value >> 8));
-				ret += "fread({}->entry_{}, 1, {}, h);\n" .format(current_reference, i, value >> 8)
-				clean += "free({}->entry_{});".format(current_reference, i)
+	def _new_allocation(self):
+		alloc = "allocation{}".format(self.allocation_counter)
+		self.allocation_counter += 1
+		return alloc
+
+	def _do_read(self, struct, current_reference):
+		ret = ""
+		clean = ""
+
+		if not struct.is_array:
+			curoff = 0
+			total_length = 0
+			for i in range(len(struct.members)):
+				total_length += struct.members[i][1]
+
+			current_allocation = self._new_allocation()
+			ret += "void* {} = malloc({});\n".format(current_allocation, total_length)
+			ret += "{} = (struct {}*){};\n".format(current_reference, struct.name, current_allocation)
+			for i in range(len(struct.members)):
+				value = struct.members[i][0]
+				length = struct.members[i][1]
+				if type(value) is int and value & 0xff == 0x0:
+					ret += "fread((char*)&{}->entry_{}, 1, {}, h);\n".format(current_reference, i, length)
+				elif type(value) is int and value & 0xff == 0x1:
+					# TODO: better array length
+					entry_allocation = self._new_allocation()
+					ret += "void* {} = malloc({});\n".format(entry_allocation, (value >> 8) + 1)
+					ret += "{}->entry_{} = (char*){};\n".format(current_reference, i, entry_allocation);
+					ret += "{}->entry_{}[{}] = 0;\n".format(current_reference, i, (value >> 8));
+					ret += "fread({}->entry_{}, 1, {}, h);\n" .format(current_reference, i, value >> 8)
+					clean += "free({});\n".format(entry_allocation)
+				else:
+					r, c = self._do_read(value, current_reference + "->entry_{}".format(i))
+					ret += r
+					clean += c
+				curoff += length
+			clean += "free({});\n".format(current_allocation)
+		else:
+			current_allocation = self._new_allocation()
+			ret += "void* {} = malloc({});\n".format(current_allocation, 8 * struct.stride)
+			ret += "{} = (char*){};\n".format(current_reference, current_allocation)
+			ret += "fread((char*){}, 1, {}, h);\n".format(current_reference, 8 * struct.stride);
+			clean += "free({});\n".format(current_allocation)
+		return ret, clean
+
+	def generate_struct_reader(self, args):
+		code = ""
+		cleanup = ""
+		arg_names = []
+		for i in range(len(args)):
+			# TODO: ugly code, maybe improve in the future
+			arg_names.append("arg_{}".format(i))
+			if args[i].size == 0:
+				# this is an int
+				code += args[i].get_field(ARCH_BITS / 8, 0).replace("entry_0", "arg_{}".format(i)) + "\n"
+				code += "fread(&arg_{}, 1, 8, h);\n".format(i)
+			elif len(args[i].members) == 1:
+				# this is a primitive pointer
+				code += args[i].get_field(ARCH_BITS / 8, 0).replace("entry_0", "temp_arg_{}".format(i)) + "\n"
+				code += args[i].get_field(ARCH_BITS / 8, 0).replace("entry_0", "*arg_{}".format(i))[:-1] + " = &temp_arg_{};\n".format(i)
+				code += "fread(arg_{}, 1, 8, h);\n".format(i)
 			else:
-				r, c = do_read(value, current_reference + "->entry_{}".format(i))
-				ret += r
-				clean += c
-			curoff += length
-		clean += "free({});\n".format(current_reference)
-	else:
-		ret += "{} = (char*)malloc({});\n".format(current_reference, 8 * struct.stride)
-		ret += "fread((char*){}, 1, {}, h);\n".format(current_reference, 8 * struct.stride);
-		clean += "free({});\n".format(current_reference)
-	return ret, clean
+				cur = args[i]
+				if isinstance(cur, Struct) and not cur.is_array:
+					# struct
+					code += "struct {}* arg_{};\n".format(cur.name, i)
+					res, clean = self._do_read(cur, "arg_{}".format(i))
+					code += res
+					cleanup += clean
+				else:
+					# array
+					array_length = 8
+					code += "char* {} = (char*)malloc({});\n".format(arg_names[-1], array_length + 1)
+					code += "{}[{}] = 0;\n".format(arg_names[-1], array_length)
+					code += "fread({}, 1, {}, h);\n".format(arg_names[-1], array_length)
+					cleanup += "free({});\n".format(arg_names[-1])
+		return code, cleanup, ", ".join(arg_names)
 
 def generate_struct_reader(args):
-	code = ""
-	cleanup = ""
-	arg_names = []
-	for i in range(len(args)):
-		# TODO: ugly code, maybe improve in the future
-		arg_names.append("arg_{}".format(i))
-		if args[i].size == 0:
-			# this is an int
-			code += args[i].get_field(ARCH_BITS / 8, 0).replace("entry_0", "arg_{}".format(i)) + "\n"
-			code += "fread(&arg_{}, 1, 8, h);\n".format(i)
-		elif len(args[i].members) == 1:
-			# this is a primitive pointer
-			code += args[i].get_field(ARCH_BITS / 8, 0).replace("entry_0", "temp_arg_{}".format(i)) + "\n"
-			code += args[i].get_field(ARCH_BITS / 8, 0).replace("entry_0", "*arg_{}".format(i))[:-1] + " = &temp_arg_{};\n".format(i)
-			code += "fread(arg_{}, 1, 8, h);\n".format(i)
-		else:
-			cur = args[i]
-			if isinstance(cur, Struct) and not cur.is_array:
-				# struct
-				code += "struct {}* arg_{};\n".format(cur.name, i)
-				res, clean = do_read(cur, "arg_{}".format(i))
-				code += res
-				cleanup += clean
-			else:
-				# array
-				array_length = 8
-				code += "char* {} = (char*)malloc({});\n".format(arg_names[-1], array_length + 1)
-				code += "{}[{}] = 0;\n".format(arg_names[-1], array_length)
-				code += "fread({}, 1, {}, h);\n".format(arg_names[-1], array_length)
-				cleanup += "free({});\n".format(arg_names[-1])
-	return code, cleanup, ", ".join(arg_names)
+	generator = Generator()
+	return generator.generate_struct_reader(args)
