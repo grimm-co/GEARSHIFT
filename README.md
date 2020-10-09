@@ -39,8 +39,8 @@ is an executable rather than a shared library, you may need to write your own
 harness, but you can use the generated code to create the input datastructure.
 
 If your target is an ELF executable, you may be able to fool `dlopen` into
-loading your binary by removing the PIE flag. The LIEF Project can be used to
-do so [as described
+loading your binary by removing the PIE flag. The LIEF Project (versions >= 0.11.0)
+can be used to do so [as described
 here](https://lief.quarkslab.com/doc/latest/tutorials/08_elf_bin2lib.html#warning-for-glic-2-29-users).
 However, this may completely break your binary, depending on what relocations
 and other loader features it uses.
