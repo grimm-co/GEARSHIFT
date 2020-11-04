@@ -76,11 +76,9 @@ argument_structs = [None] * len(argument_varnodes)
 for i in pci.stores:
 	if i.contains(argument_node_objs):
 		important_stores.append(i)
-		# print(i)
 for i in pci.loads:
 	if i.contains(argument_node_objs):
 		important_loads.append(i)
-		# print(i)
 
 print("Start creating struct")
 
@@ -100,7 +98,6 @@ for i in (important_stores + important_loads):
 			grand[0].make_array()
 		used_expressions.append(simplified)
 		used_hash.add(hash(simplified))
-		# print(str(simplified))
 	except ValueError as e:
 		print(e)
 
@@ -154,5 +151,3 @@ with open(windows_filename, 'w') as harness:
 
 end = time.time()
 print("DONE - Took:", (end - start))
-
-# execfile("D:\\CTF\\research\\gearshift\\pcode_trace\\files\\go.py")

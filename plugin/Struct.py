@@ -63,9 +63,6 @@ class Struct(object):
 		print(self.members)
 		self.is_array = True
 		stride = self.members[0][1]
-		#for i in range(len(self.members)):
-			#if self.members[i][1] != stride:
-				#raise Exception("Array stride different")
 		self.stride = stride
 
 	# Consolidates struct members of size 1 into a char array
@@ -103,8 +100,6 @@ class Struct(object):
 			print("Misaligned buf")
 			self.break_member(idx - 1)
 			self.insert(offset, member)
-			# self.merge_until(idx - 1, member)
-			# raise Exception("Merging")
 			return
 
 		# combine
@@ -115,12 +110,9 @@ class Struct(object):
 			idx += 1
 		if c != member[1]:
 			# Misaligned struct and data size accesses - might be an array?
-			# TODO: better solution later to mark data as array? For now we break the conflicting type and reinsert
 			print("Misaligned buf")
 			self.break_member(idx - 1)
 			self.insert(offset, member)
-			# self.merge_until(idx - 1, member)
-			# raise Exception("Merging")
 			return
 		c = 0
 		idx = temp
@@ -139,7 +131,6 @@ class Struct(object):
 
 	# Breaks apart the member at index self.members[idx]
 	def break_member(self, idx):
-		# TODO: figure out why this assertion fails sometimes
 		assert not isinstance(self.members[idx][0], Struct)
 		size = self.members[idx][1]
 		del self.members[idx]
@@ -158,11 +149,8 @@ class Struct(object):
 			print(self.members[idx - 1][1])
 			print(c)
 			print("Get issue", self.members[idx - 1])
-			# TODO: instead of breaking, we should truncate conflicting member instead
 			self.break_member(idx - 1)
 			ret = self.get(offset)
-			# self.merge_until(idx - 1, ret)
-			# raise Exception("Merging")
 			return ret
 		self.mark(offset, offset + self.members[idx][1])
 		return self.members[idx]
@@ -201,10 +189,8 @@ class Struct(object):
 		# first, we detect if it's size 0, or only has one member
 		if self.size == 0:
 			return ""
-			#return self.get_field(ARCH_BITS / 8, 0).replace("entry_0", "arg_{}".format(argument_number))
 		elif len(self.members) == 1:
 			return ""
-			#return self.get_field(self.members[0][1], 0).replace("entry_0", "*arg_{}".format(argument_number))
 
 		res = "struct {} {{\n".format(self.name)
 

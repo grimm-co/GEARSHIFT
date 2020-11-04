@@ -42,11 +42,6 @@ class PCodeInterpreter:
 		inputs = instruction.getInputs()
 		self.depth = depth
 
-		# if output is not None:
-		# 	print "Instruction", output.getPCAddress(), instruction, depth
-		# else:
-		# 	print "Instruction", inputs[0].getPCAddress(), instruction, depth
-
 		saved_instruction = self.instruction
 		self.instruction = instruction
 
@@ -319,7 +314,6 @@ class PCodeInterpreter:
 
 	def store(self, inputs, output):
 		assert len(inputs) == 3
-		# TODO: record struct store and perform backwards analysis on the stored value to find its type
 		for i in self.lookup_node(inputs[1]):
 			for j in self.lookup_node(inputs[2]):
 				temp = i.ptr_deref()
@@ -339,11 +333,9 @@ class PCodeInterpreter:
 				value = value.resize(output.getSize())
 			self.store_node(output, value)
 			self.loads.append(value)
-			# print "LOAD:", value
 
 	def subpiece(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
-		# TODO: am I understanding this instruction correctly?
 		for i in self.lookup_node(inputs[0]):
 			for j in self.lookup_node(inputs[1]):
 				value = i.shr(j.mult(Node(currentProgram.getAddressFactory().getConstantAddress(8), None, None, i.byte_length)))
@@ -353,7 +345,6 @@ class PCodeInterpreter:
 
 	def piece(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
-		# TODO: am I understanding this instruction correctly?
 		for i in self.lookup_node(inputs[0]):
 			for j in self.lookup_node(inputs[1]):
 				value = i.shl(Node(currentProgram.getAddressFactory().getConstantAddress(j.byte_length), None, None, i.byte_length)).add(j)
@@ -378,16 +369,12 @@ class PCodeInterpreter:
 				self.store_node(output, j)
 		self.loop_variants.add(output)
 
-		# TODO: prune possibilities
-		# print "Multiequal", output.getPCAddress(), possibilities
-
 	def int_sext(self, inputs, output):
 		assert output is not None and len(inputs) == 1
 		for i in self.lookup_node(inputs[0]):
 			self.store_node(output, i.resize(output.getSize()))
 
 	def int_zext(self, inputs, output):
-		# TODO: better modeling later
 		assert output is not None and len(inputs) == 1
 		for i in self.lookup_node(inputs[0]):
 			self.store_node(output, i.resize(output.getSize()))
@@ -410,7 +397,6 @@ class PCodeInterpreter:
 					temp = b.mult(c)
 					result = a.add(temp)
 					assert output.getSize() == result.byte_length
-					# TODO: maybe use this as struct information?
 					self.store_node(output, result)
 
 	def callind(self, inputs, output):
@@ -430,7 +416,8 @@ class PCodeInterpreter:
 		called_func = temp.getFunctionAt(pc_addr)
 		print("call:", inputs[0].getPCAddress())
 
-		# print("START CALL RECURSIVE FORWARD ANALYSIS")
+		##### START CALL RECURSIVE FORWARD ANALYSIS
+
 		# Note: the function analysis parameter's varnodes are DIFFERENT that the varnodes from our current state. Thus we replace the varnode -> Node map in the function with the calling parameters
 		checkFixParameters(called_func, inputs[1:])
 		if called_func not in forward_cache:
@@ -451,7 +438,6 @@ class PCodeInterpreter:
 				param_list.append([])
 			self.subcall_parameter_cache[called_func] = param_list
 
-		# TODO: store replaced expresions inside subcall_parameter_cache if self.depth is 0
 		node_objects = map(self.lookup_node, inputs[1:])
 		for i in range(len(self.subcall_parameter_cache[called_func])):
 			self.subcall_parameter_cache[called_func][i] += node_objects[i]
@@ -471,9 +457,7 @@ class PCodeInterpreter:
 					if i in arrs:
 						self.arrays.append(self.loads[-1])
 
-			# raise Exception("L")
-		#print(stores, loads)
-		# print("END CALL RECURSIVE FORWARD ANALYSIS")
+		##### END CALL RECURSIVE FORWARD ANALYSIS
 
 		# replace args in parameter cache:
 		for func_name in nested_subcall_parameter_cache:
@@ -494,15 +478,14 @@ class PCodeInterpreter:
 
 		if output is not None:
 			if called_func not in backward_cache: # This means we want to backwards interpolate the return type
-				# print("START CALL RECURSIVE BACKWARDS ANALYSIS")
+				##### START CALL RECURSIVE BACKWARDS ANALYSIS
 
-				print("Test fix", output.getPCAddress())
 				checkFixReturn(called_func, output)
 				pci_new = PCodeInterpreter()
 				ret_type, subfunc_parameter_varnodes = analyzeFunctionBackward(called_func, pci_new)
 				backward_cache[called_func] = (ret_type, map(pci_new.lookup_node, subfunc_parameter_varnodes))
 
-				# print("END CALL RECURSIVE BACKWARDS ANALYSIS")
+				##### END CALL RECURSIVE BACKWARDS ANALYSIS
 
 			ret_type, subfunc_parameter_node_objs = backward_cache[called_func]
 			replaced_rets = []
@@ -525,7 +508,6 @@ class PCodeInterpreter:
 			self.store_node(output, result)
 
 	def indirect(self, inputs, output):
-		# TODO: model more effectively in the future? Not sure what inputs[1] does
 		for value in self.lookup_node(inputs[0]):
 			assert value.byte_length == output.getSize()
 			self.store_node(output, value)
@@ -533,32 +515,12 @@ class PCodeInterpreter:
 	# maps a Ghidra Varnode object to a binary tree object that represents its expression
 	def lookup_node(self, varnode):
 		# Detect cycle
-		# print("Lookup", varnode)
 		if varnode in self.cycle_exec:
 			self.cycle_exec[varnode] += 1
 		if varnode in self.cycle_exec and self.cycle_exec[varnode] > 0:
-			# print "CYCLE DETECTED", varnode
-			# print "CYCLE OPERATION", self.instruction
-			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
 			if varnode not in self.nodes:
 				self.store_node(varnode, Node(("CYCLE", varnode), None, None, varnode.getSize()))
 			return self.nodes[varnode]
-		"""
-		if varnode in self.nodes and varnode in self.cycle_exec:
-			print "CYCLE DETECTED", varnode
-			print "CYCLE OPERATION", self.instruction
-			# del self.nodes[varnode][self.nodes[varnode].index("CYCLE")]
-			for i in self.nodes[varnode]:
-				i.cyclic = True
-				print("Make cyclic", i)
-			ins1 = varnode.getDef()
-			ins2 = self.instruction
-			print ins1.getOutput().getPCAddress(), ins1
-			print ins2.getInputs()[0].getPCAddress(), ins2
-
-			# Here we want to undefine the loop variant, then 
-
-		elif varnode.isConstant():"""
 		if varnode.isConstant():
 			# create constant node
 			return [Node(varnode, None, None, varnode.getSize())]
@@ -566,19 +528,15 @@ class PCodeInterpreter:
 			return [Node(varnode, None, None, varnode.getSize())]
 		elif varnode not in self.nodes or varnode in self.cycle_exec:
 			# We have to detect cycles here, by temporarily storing "CYCLE", and if the returned value is "CYCLE", we know there is cycle
-			# self.store_node(varnode, cycle_node)
 			if varnode not in self.cycle_exec:
 				self.cycle_exec[varnode] = 0
 			
-			# print("START CYCLE")
 			self.get_node_definition(varnode)
-			# print("END CYCLE")
 
 			if self.cycle_exec[varnode] == 0:
 				del self.cycle_exec[varnode]
 
 			return self.lookup_node(varnode)
-		# print("Lookup Result", self.nodes[varnode])
 
 		# Prune
 		if len(self.nodes[varnode]) > NODE_LIMIT:
@@ -587,11 +545,8 @@ class PCodeInterpreter:
 
 	# recursively backwards traces for node's definition
 	def get_node_definition(self, varnode):
-		# TODO: maybe we should reset PCodeInterpreter state for this?
-
 		defining_instruction = varnode.getDef()
 		if defining_instruction is None:
-			# TODO: fix this? I'm not sure what causes this error
 			print("WARNING: Orphaned varnode? - assuming multiequal analyzation error and skipping")
 			self.nodes[varnode] = [Node("ORPHANED", None, None, varnode.getSize())]
 			return
@@ -602,7 +557,6 @@ class PCodeInterpreter:
 		if varnode not in self.nodes:
 			self.nodes[varnode] = []
 		if hash(nodeobj) not in map(hash, self.nodes[varnode]):
-		#if (nodeobj.relevant() or len(self.nodes[varnode]) == 0) and hash(nodeobj) not in map(hash, self.nodes[varnode]):
 			self.nodes[varnode].append(nodeobj)
 
 def get_highfunction(func):
@@ -624,7 +578,6 @@ def checkFixParameters(func, parameters):
 
 	# Check arguments
 	func_proto = hf.getFunctionPrototype()
-	# print("NO PARAM", func_proto.getNumParams(), len(parameters))
 	if func_proto.getNumParams() != len(parameters) and not func.hasVarArgs():
 		print(func, "call signature wrong...")
 		raise Exception("Function call signature different")
@@ -638,9 +591,6 @@ def checkFixParameters(func, parameters):
 
 # Make sure func signature matches the call
 def checkFixReturn(func, ret_varnode):
-	# sig = func.getSignature()
-	# sig.setReturnType(Undefined.getUndefinedDataType(0x4))
-	# ApplyFunctionSignatureCmd(func.getEntryPoint(), sig, SourceType.USER_DEFINED).applyTo(currentProgram)
 	hf = get_highfunction(func)
 
 	func_proto = hf.getFunctionPrototype()
@@ -652,7 +602,6 @@ def checkFixReturn(func, ret_varnode):
 				sig = func.getSignature()
 				sig.setReturnType(Undefined.getUndefinedDataType(ret_varnode.getSize()))
 				ApplyFunctionSignatureCmd(func.getEntryPoint(), sig, SourceType.USER_DEFINED).applyTo(currentProgram)
-				#checkFixReturn(func, ret_varnode)
 
 # This function performs backwards analysis on the function return type with base case of function parameters
 # init_param replaces the parameters of the current func to be analyzed in terms the passed parameter expressions
@@ -694,7 +643,6 @@ def traverseForward(cur, depth, pci, visited):
 	children = cur.getDescendants()
 	for child in children:
 		pci.process(child, depth)
-		# TODO: path loop condition based on changes in state
 		if child.getOutput() is not None and child.getOutput() not in visited:
 			visited.add(child.getOutput())
 			traverseForward(child.getOutput(), depth + 1, pci, visited)
@@ -729,7 +677,6 @@ def analyzeFunctionForward(func, pci):
 
 		pci.nodes = new_nodes
 
-		# print("Return Node:", ret_varnode)
 		for arg in range(len(argument_varnodes)):
 			pci.store_node(argument_varnodes[arg], argument_nodes[arg])
 
