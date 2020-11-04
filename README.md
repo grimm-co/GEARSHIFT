@@ -55,7 +55,8 @@ and other loader features it uses.
 The current tool is implemented as a Ghidra script. It leverages Ghidra's
 intermediate language and data dependency analysis to discover struct fields,
 and outputs its results to the Ghidra Data Type Manager. See
-[the associated blog post](https://blog.grimm-co.com/) for more information.
+[the associated blog post](https://blog.grimm-co.com/2020/11/automated-struct-identification-with.html)
+for more information.
 
 ## References of interest:
 
