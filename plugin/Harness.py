@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # @category: GEARSHIFT.internal
 
 linux_template = r"""#include <stdio.h>
