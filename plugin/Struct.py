@@ -1,5 +1,7 @@
 # @category: GEARSHIFT.internal
 
+from __future__ import print_function
+
 from ghidra.program.model.data import StructureDataType, CategoryPath, DataTypeConflictHandler, PointerDataType, BuiltInDataTypeManager, ArrayDataType
 
 class Struct:
