@@ -23,11 +23,19 @@ int main(int argc, char** argv) {{
                 return 1;
         }}
 	void* handle = dlopen("{process_path}", RTLD_LAZY);
+        if (handle == NULL) {{
+                printf("Unable to open {process_path}. Exiting.\n");
+                return 2;
+        }}
 	// In glibc, the handle points to the library base address
 	char* base = *((char**)handle);
 	func f = (func)(base + 0x{func_offset:x});
 
 	FILE* h = fopen(argv[1], "r");
+        if (h == NULL) {{
+                printf("Unable to open %s. Exiting.\n", argv[1]);
+                return 3;
+        }}
 
 {code}
 
