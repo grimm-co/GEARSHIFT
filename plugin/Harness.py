@@ -11,17 +11,17 @@ linux_template = r"""#include <stdio.h>
 typedef int(*func)(void* a, ...);
 
 int main(int argc, char** argv) {{
-        if (argc < 2) {
-                if (argc < 1) {
+        if (argc < 2) {{
+                if (argc < 1) {{
                         printf("Usage: ./gearshift_harness_linux input_file\n");
-                } else {
+                }} else {{
                         printf("Usage: %s input_file\n", argv[0]);
-                }
+                }}
                 printf("\n");
                 printf("\tinput_file - data to put into the arguments\n");
                 printf("\n");
                 return 1;
-        }
+        }}
 	void* handle = dlopen("{process_path}", RTLD_LAZY);
 	// In glibc, the handle points to the library base address
 	char* base = *((char**)handle);
@@ -49,17 +49,17 @@ windows_template = r"""#include <stdio.h>
 typedef int(*func)(void* a, ...);
 
 int main(int argc, char** argv) {{
-        if (argc < 2) {
-                if (argc < 1) {
+        if (argc < 2) {{
+                if (argc < 1) {{
                         printf("Usage: gearshift_harness_windows input_file\n");
-                } else {
+                }} else {{
                         printf("Usage: %s input_file\n", argv[0]);
-                }
+                }}
                 printf("\n");
                 printf("\tinput_file - data to put into the arguments\n");
                 printf("\n");
                 return 1;
-        }
+        }}
 	HMODULE lib = LoadLibraryA("{process_path}");
 	if (!lib) {{
 		printf("Load Library failed: %d\n", GetLastError());
