@@ -1,7 +1,10 @@
 # GEARSHIFT
 GEARSHIFT is a tool that performs structure recovery for a specified function
-within a stripped binary. It is so named because it leverages a mix of reverse
-and forward engineering.
+within a stripped binary.  It also generates a fuzz harness that can be used
+to call functions in a shared object (.so) or dynamically linked library (.dll)
+file.
+
+The name comes from it leveraging a mix of reverse and forward engineering.
 
 ## Installation
 
@@ -21,7 +24,10 @@ script directories:
 3. Any structs that are identified from the arguments of the function will be
    defined in Data Type Manager under $binary_name > struct.
 4. The script will generate harness code and print out the names of the files
-   it generated.
+   it generated
+5. Compile the harness (must be compiled with `-ldl` flag for shared objects)
+6. Run the harness, passing it the file name of your input file as the only
+argument
 
 ## Example Programs
 
