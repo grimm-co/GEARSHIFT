@@ -115,7 +115,6 @@ class Struct:
 			idx += 1
 		if c != member[1]:
 			# Misaligned struct and data size accesses - might be an array?
-			# TODO: better solution later to mark data as array? For now we break the conflicting type and reinsert
 			print("Misaligned buf")
 			self.break_member(idx - 1)
 			self.insert(offset, member)
@@ -139,7 +138,6 @@ class Struct:
 
 	# Breaks apart the member at index self.members[idx]
 	def break_member(self, idx):
-		# TODO: figure out why this assertion fails sometimes
 		assert not isinstance(self.members[idx][0], Struct)
 		size = self.members[idx][1]
 		del self.members[idx]
@@ -158,7 +156,6 @@ class Struct:
 			print(self.members[idx - 1][1])
 			print(c)
 			print("Get issue", self.members[idx - 1])
-			# TODO: instead of breaking, we should truncate conflicting member instead
 			self.break_member(idx - 1)
 			ret = self.get(offset)
 			# self.merge_until(idx - 1, ret)
@@ -245,7 +242,6 @@ def do_read(struct, current_reference):
 			if type(value) is int and value & 0xff == 0x0:
 				ret += "fread((char*)&{}->entry_{}, 1, {}, h);\n".format(current_reference, i, length)
 			elif type(value) is int and value & 0xff == 0x1:
-				# TODO: better array length
 				ret += "{}->entry_{} = (char*)malloc({});\n".format(current_reference, i, (value >> 8) + 1);
 				ret += "{}->entry_{}[{}] = 0;\n".format(current_reference, i, (value >> 8));
 				ret += "fread({}->entry_{}, 1, {}, h);\n" .format(current_reference, i, value >> 8)
@@ -267,7 +263,6 @@ def generate_struct_reader(args):
 	cleanup = ""
 	arg_names = []
 	for i in range(len(args)):
-		# TODO: ugly code, maybe improve in the future
 		arg_names.append("arg_{}".format(i))
 		if args[i].size == 0:
 			# this is an int

@@ -319,7 +319,6 @@ class PCodeInterpreter:
 
 	def store(self, inputs, output):
 		assert len(inputs) == 3
-		# TODO: record struct store and perform backwards analysis on the stored value to find its type
 		for i in self.lookup_node(inputs[1]):
 			for j in self.lookup_node(inputs[2]):
 				temp = i.ptr_deref()
@@ -343,7 +342,6 @@ class PCodeInterpreter:
 
 	def subpiece(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
-		# TODO: am I understanding this instruction correctly?
 		for i in self.lookup_node(inputs[0]):
 			for j in self.lookup_node(inputs[1]):
 				value = i.shr(j.mult(Node(currentProgram.getAddressFactory().getConstantAddress(8), None, None, i.byte_length)))
@@ -353,7 +351,6 @@ class PCodeInterpreter:
 
 	def piece(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
-		# TODO: am I understanding this instruction correctly?
 		for i in self.lookup_node(inputs[0]):
 			for j in self.lookup_node(inputs[1]):
 				value = i.shl(Node(currentProgram.getAddressFactory().getConstantAddress(j.byte_length), None, None, i.byte_length)).add(j)
@@ -378,16 +375,12 @@ class PCodeInterpreter:
 				self.store_node(output, j)
 		self.loop_variants.add(output)
 
-		# TODO: prune possibilities
-		# print "Multiequal", output.getPCAddress(), possibilities
-
 	def int_sext(self, inputs, output):
 		assert output is not None and len(inputs) == 1
 		for i in self.lookup_node(inputs[0]):
 			self.store_node(output, i.resize(output.getSize()))
 
 	def int_zext(self, inputs, output):
-		# TODO: better modeling later
 		assert output is not None and len(inputs) == 1
 		for i in self.lookup_node(inputs[0]):
 			self.store_node(output, i.resize(output.getSize()))
@@ -410,7 +403,6 @@ class PCodeInterpreter:
 					temp = b.mult(c)
 					result = a.add(temp)
 					assert output.getSize() == result.byte_length
-					# TODO: maybe use this as struct information?
 					self.store_node(output, result)
 
 	def callind(self, inputs, output):
@@ -451,7 +443,6 @@ class PCodeInterpreter:
 				param_list.append([])
 			self.subcall_parameter_cache[called_func] = param_list
 
-		# TODO: store replaced expresions inside subcall_parameter_cache if self.depth is 0
 		node_objects = map(self.lookup_node, inputs[1:])
 		for i in range(len(self.subcall_parameter_cache[called_func])):
 			self.subcall_parameter_cache[called_func][i] += node_objects[i]
@@ -525,7 +516,6 @@ class PCodeInterpreter:
 			self.store_node(output, result)
 
 	def indirect(self, inputs, output):
-		# TODO: model more effectively in the future? Not sure what inputs[1] does
 		for value in self.lookup_node(inputs[0]):
 			assert value.byte_length == output.getSize()
 			self.store_node(output, value)
@@ -587,11 +577,8 @@ class PCodeInterpreter:
 
 	# recursively backwards traces for node's definition
 	def get_node_definition(self, varnode):
-		# TODO: maybe we should reset PCodeInterpreter state for this?
-
 		defining_instruction = varnode.getDef()
 		if defining_instruction is None:
-			# TODO: fix this? I'm not sure what causes this error
 			print("WARNING: Orphaned varnode? - assuming multiequal analyzation error and skipping")
 			self.nodes[varnode] = [Node("ORPHANED", None, None, varnode.getSize())]
 			return
@@ -694,7 +681,6 @@ def traverseForward(cur, depth, pci, visited):
 	children = cur.getDescendants()
 	for child in children:
 		pci.process(child, depth)
-		# TODO: path loop condition based on changes in state
 		if child.getOutput() is not None and child.getOutput() not in visited:
 			visited.add(child.getOutput())
 			traverseForward(child.getOutput(), depth + 1, pci, visited)

@@ -6,7 +6,6 @@ from Struct import Struct
 from ghidra.program.model.pcode import Varnode
 
 # Abstract binary operation tree that stores the symbolic expression
-# TODO: pretty print cycles?
 class Node:
 	def __init__(self, operation, left, right, byte_length):
 		self.left = left
@@ -49,7 +48,6 @@ class Node:
 					raise ValueError("Negative constaints not supported yet")
 				offset += self.right.operation.getOffset()
 			else:
-				# TODO: maybe mark these as arrays
 				if not self.right.isConstant():
 					print("Non constant indexed detected: Possible array?")
 				else:
@@ -65,7 +63,7 @@ class Node:
 				sub_struct, offset, grand = self.left.create_struct(arg_struct_list, self.byte_length)
 				sub_struct = temp
 			sub_struct.extend(offset + parent_byte_length)
-			if sub_struct.get(offset)[1] == 1: # TODO: change to undefined check instead
+			if sub_struct.get(offset)[1] == 1:
 				sub_struct.insert(offset, (0, parent_byte_length))
 			return (sub_struct.get(offset)[0], 0, (sub_struct, offset))
 		elif self.operation == "RESIZE":
