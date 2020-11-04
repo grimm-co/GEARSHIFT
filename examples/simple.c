@@ -19,13 +19,14 @@ void fill_pair(pair *pairptr) {
   pairptr->second = 7;
 }
 
-void initgrabbag(grabbag *bag) {
+int initgrabbag(grabbag *bag) {
   bag->pairptr = malloc(sizeof(bag->pairptr));
   fill_pair(&bag->mypair);
   fill_pair(bag->pairptr);
   bag->myint = 2;
   bag->mychar = 7;
   bag->mysize = 8;
+  return bag->myint;
 }
 
 #ifdef INCLUDE_MAIN
