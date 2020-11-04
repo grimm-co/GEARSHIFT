@@ -3,6 +3,7 @@
 
 from __future__ import print_function
 import time
+import os.path
 
 from ghidra.app.decompiler import *
 from ghidra.program.model import address
@@ -105,8 +106,11 @@ print("Done interpolating structs")
 # Apply data type to original function
 orig_params = currentFunction.getParameters()
 assert len(orig_params) == len(args)
+struct_code = []
 for i in range(len(args)):
-	print(args[i].pretty_print())
+	code = args[i].pretty_print()
+	struct_code.append(code)
+	print(code)
 	dt = args[i].get_dtype()
 	print(dt)
 	orig_params[i].setDataType(dt, SourceType.USER_DEFINED)
@@ -128,6 +132,22 @@ for func in pci.subcall_parameter_cache:
 				if isinstance(t, Struct.Struct):
 					print("Applying type {} to function {} parameter {}".format(t.name, func, param_idx))
 					func.getParameters()[param_idx].setDataType(t.get_dtype(), SourceType.USER_DEFINED)
+
+code, cleanup, arg_names = Struct.generate_struct_reader(args)
+struct_defs = "".join(struct_code)
+
+linux_harness = generate_linux_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
+windows_harness = generate_windows_harness(struct_defs, program_path, function_offset, code, cleanup, arg_names)
+
+linux_filename = os.path.abspath('gearshift_harness_linux.c')
+windows_filename = os.path.abspath('gearshift_harness_windows.c')
+
+print("writing linux harness to", linux_filename)
+with open(linux_filename, 'w') as harness:
+    harness.write(linux_harness)
+print("writing windows harness to", windows_filename)
+with open(windows_filename, 'w') as harness:
+    harness.write(windows_harness)
 
 end = time.time()
 print("DONE - Took:", (end - start))

@@ -28,8 +28,10 @@ void initgrabbag(grabbag *bag) {
   bag->mysize = 8;
 }
 
+#ifdef INCLUDE_MAIN
 int main() {
   grabbag bag;
 
   initgrabbag(&bag);
 }
+#endif
