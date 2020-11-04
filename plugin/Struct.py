@@ -242,9 +242,8 @@ class Generator(object):
 				value = struct.members[i][0]
 				length = struct.members[i][1]
 				if type(value) is int and value & 0xff == 0x0:
-					ret += "fread((char*)&{}->entry_{}, 1, {}, h);\n".format(current_reference, i, length)
+					ret += "fread((void*)&{}->entry_{}, 1, {}, h);\n".format(current_reference, i, length)
 				elif type(value) is int and value & 0xff == 0x1:
-					# TODO: better array length
 					entry_allocation = self._new_allocation()
 					ret += "void* {} = malloc({});\n".format(entry_allocation, (value >> 8) + 1)
 					ret += "{}->entry_{} = (char*){};\n".format(current_reference, i, entry_allocation);
@@ -270,7 +269,6 @@ class Generator(object):
 		cleanup = ""
 		arg_names = []
 		for i in range(len(args)):
-			# TODO: ugly code, maybe improve in the future
 			arg_names.append("arg_{}".format(i))
 			if args[i].size == 0:
 				# this is an int
