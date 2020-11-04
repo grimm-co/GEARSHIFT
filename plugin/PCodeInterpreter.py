@@ -1,5 +1,7 @@
 # @category: GEARSHIFT.internal
 
+from __future__ import print_function
+
 from ghidra.program.model.pcode import PcodeOp
 from ghidra.program.model.pcode import Varnode
 from ghidra.program.flatapi import FlatProgramAPI
@@ -115,12 +117,12 @@ class PCodeInterpreter:
 			self.indirect(inputs, output)
 		elif opcode == PcodeOp.RETURN:
 			if len(inputs) >= 2:
-				print "RETURN"
+				print("RETURN")
 				print(self.lookup_node(inputs[1]))
 		elif opcode == PcodeOp.CBRANCH:
 			pass
 		else:
-			print "Unsupported Opcode:", instruction.getMnemonic(), inputs[0].getPCAddress(),
+			print("Unsupported Opcode:", instruction.getMnemonic(), inputs[0].getPCAddress())
 
 		self.instruction = saved_instruction
 
@@ -312,7 +314,6 @@ class PCodeInterpreter:
 
 	def store(self, inputs, output):
 		assert len(inputs) == 3
-		# TODO: record struct store and perform backwards analysis on the stored value to find its type
 		for i in self.lookup_node(inputs[1]):
 			for j in self.lookup_node(inputs[2]):
 				temp = i.ptr_deref()
@@ -320,9 +321,9 @@ class PCodeInterpreter:
 					temp = temp.resize(j.byte_length)
 				self.stores.append(temp)
 				if log:
-					print "[*]", "STORE:", inputs[0].getPCAddress(), temp
-					print "VALUE", self.lookup_node(inputs[2])
-					print ""
+					print("[*]", "STORE:", inputs[0].getPCAddress(), temp)
+					print("VALUE", self.lookup_node(inputs[2]))
+					print("")
 
 	def load(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
@@ -335,7 +336,6 @@ class PCodeInterpreter:
 
 	def subpiece(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
-		# TODO: am I understanding this instruction correctly?
 		for i in self.lookup_node(inputs[0]):
 			for j in self.lookup_node(inputs[1]):
 				value = i.shr(j.mult(Node(currentProgram.getAddressFactory().getConstantAddress(8), None, None, i.byte_length)))
@@ -345,7 +345,6 @@ class PCodeInterpreter:
 
 	def piece(self, inputs, output):
 		assert len(inputs) == 2 and output is not None
-		# TODO: am I understanding this instruction correctly?
 		for i in self.lookup_node(inputs[0]):
 			for j in self.lookup_node(inputs[1]):
 				value = i.shl(Node(currentProgram.getAddressFactory().getConstantAddress(j.byte_length), None, None, i.byte_length)).add(j)
@@ -370,15 +369,12 @@ class PCodeInterpreter:
 				self.store_node(output, j)
 		self.loop_variants.add(output)
 
-		# TODO: prune possibilities
-
 	def int_sext(self, inputs, output):
 		assert output is not None and len(inputs) == 1
 		for i in self.lookup_node(inputs[0]):
 			self.store_node(output, i.resize(output.getSize()))
 
 	def int_zext(self, inputs, output):
-		# TODO: better modeling later
 		assert output is not None and len(inputs) == 1
 		for i in self.lookup_node(inputs[0]):
 			self.store_node(output, i.resize(output.getSize()))
@@ -401,12 +397,11 @@ class PCodeInterpreter:
 					temp = b.mult(c)
 					result = a.add(temp)
 					assert output.getSize() == result.byte_length
-					# TODO: maybe use this as struct information?
 					self.store_node(output, result)
 
 	def callind(self, inputs, output):
 		assert len(inputs) >= 1
-		print "Warning: indirect call - skipping and returning 0"
+		print("Warning: indirect call - skipping and returning 0")
 		if output is not None:
 			self.store_node(output, Node(Varnode(output.getAddress(), output.getSize()), None, None, output.getSize()))
 
@@ -419,7 +414,7 @@ class PCodeInterpreter:
 		pc_addr = pc_varnode.getAddress()
 		temp = FlatProgramAPI(currentProgram)
 		called_func = temp.getFunctionAt(pc_addr)
-		print "call:", inputs[0].getPCAddress()
+		print("call:", inputs[0].getPCAddress())
 
 		##### START CALL RECURSIVE FORWARD ANALYSIS
 
@@ -443,7 +438,6 @@ class PCodeInterpreter:
 				param_list.append([])
 			self.subcall_parameter_cache[called_func] = param_list
 
-		# TODO: store replaced expresions inside subcall_parameter_cache if self.depth is 0
 		node_objects = map(self.lookup_node, inputs[1:])
 		for i in range(len(self.subcall_parameter_cache[called_func])):
 			self.subcall_parameter_cache[called_func][i] += node_objects[i]
@@ -514,7 +508,6 @@ class PCodeInterpreter:
 			self.store_node(output, result)
 
 	def indirect(self, inputs, output):
-		# TODO: model more effectively in the future? Not sure what inputs[1] does
 		for value in self.lookup_node(inputs[0]):
 			assert value.byte_length == output.getSize()
 			self.store_node(output, value)
@@ -552,11 +545,8 @@ class PCodeInterpreter:
 
 	# recursively backwards traces for node's definition
 	def get_node_definition(self, varnode):
-		# TODO: maybe we should reset PCodeInterpreter state for this?
-
 		defining_instruction = varnode.getDef()
 		if defining_instruction is None:
-			# TODO: fix this? I'm not sure what causes this error
 			print("WARNING: Orphaned varnode? - assuming multiequal analyzation error and skipping")
 			self.nodes[varnode] = [Node("ORPHANED", None, None, varnode.getSize())]
 			return
@@ -589,7 +579,7 @@ def checkFixParameters(func, parameters):
 	# Check arguments
 	func_proto = hf.getFunctionPrototype()
 	if func_proto.getNumParams() != len(parameters) and not func.hasVarArgs():
-		print func, "call signature wrong..."
+		print(func, "call signature wrong...")
 		raise Exception("Function call signature different")
 
 	argument_varnodes = []
@@ -608,7 +598,7 @@ def checkFixReturn(func, ret_varnode):
 	for i in hf.getPcodeOps():
 		if i.getOpcode() == PcodeOp.RETURN:
 			if len(i.getInputs()) < 2:
-				print func, "has no return value, fixing type...", i.getInputs()[0].getPCAddress()
+				print(func, "has no return value, fixing type...", i.getInputs()[0].getPCAddress())
 				sig = func.getSignature()
 				sig.setReturnType(Undefined.getUndefinedDataType(ret_varnode.getSize()))
 				ApplyFunctionSignatureCmd(func.getEntryPoint(), sig, SourceType.USER_DEFINED).applyTo(currentProgram)
@@ -616,7 +606,7 @@ def checkFixReturn(func, ret_varnode):
 # This function performs backwards analysis on the function return type with base case of function parameters
 # init_param replaces the parameters of the current func to be analyzed in terms the passed parameter expressions
 def analyzeFunctionBackward(func, pci, init_param=None):
-	print "Backwards analysis", func.getName()
+	print("Backwards analysis", func.getName())
 
 	hf = get_highfunction(func)
 	HighFunctionDBUtil.commitParamsToDatabase(hf, True, SourceType.DEFAULT)
@@ -653,14 +643,13 @@ def traverseForward(cur, depth, pci, visited):
 	children = cur.getDescendants()
 	for child in children:
 		pci.process(child, depth)
-		# TODO: path loop condition based on changes in state
 		if child.getOutput() is not None and child.getOutput() not in visited:
 			visited.add(child.getOutput())
 			traverseForward(child.getOutput(), depth + 1, pci, visited)
 
 # This function performs forward analysis on function parameters to determine its type (struct, array, or primitive)
 def analyzeFunctionForward(func, pci):
-	print "Forwards analysis", func.getName()
+	print("Forwards analysis", func.getName())
 	hf = get_highfunction(func)
 	HighFunctionDBUtil.commitParamsToDatabase(hf, True, SourceType.DEFAULT)
 	print(func.getParameters())
