@@ -587,7 +587,7 @@ def checkFixParameters(func, parameters):
 	for i in range(func_proto.getNumParams()):
 		cur = func_proto.getParam(i).getRepresentative()
 		if cur.getSize() != parameters[i].getSize():
-			print(cur.getSize(), parameters[i].getSize())
+			print("i: %d, cur.getSize: %d, parameters[i].getSize(): %d" % (i, cur.getSize(), parameters[i].getSize()))
 			raise Exception("Func parameter size mismatch")	
 
 # Make sure func signature matches the call
