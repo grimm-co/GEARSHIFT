@@ -594,7 +594,6 @@ def checkFixParameters(func, parameters):
 def checkFixReturn(func, ret_varnode):
 	hf = get_highfunction(func)
 
-	func_proto = hf.getFunctionPrototype()
 	#  Check return types
 	for i in hf.getPcodeOps():
 		if i.getOpcode() == PcodeOp.RETURN:
@@ -612,7 +611,7 @@ def analyzeFunctionBackward(func, pci, init_param=None):
 	hf = get_highfunction(func)
 	HighFunctionDBUtil.commitParamsToDatabase(hf, True, SourceType.DEFAULT)
 
-	func_proto = hf.getFunctionPrototype()
+	func_proto = hf.getLocalSymbolMap()
 	# Grab return varnodes
 	return_varnodes = []
 	for i in hf.getPcodeOps():
