@@ -578,7 +578,7 @@ def checkFixParameters(func, parameters):
 	hf = get_highfunction(func)
 
 	# Check arguments
-	func_proto = hf.getFunctionPrototype()
+	func_proto = hf.getLocalSymbolMap()
 	if func_proto.getNumParams() != len(parameters) and not func.hasVarArgs():
 		print(func, "call signature wrong...")
 		raise Exception("Function call signature different")
@@ -656,7 +656,7 @@ def analyzeFunctionForward(func, pci):
 	print(func.getParameters())
 
 	# get the varnode of function parameters
-	func_proto = hf.getFunctionPrototype()
+	func_proto = hf.getLocalSymbolMap()
 	argument_varnodes = []
 	argument_nodes = []
 	for i in range(func_proto.getNumParams()):
